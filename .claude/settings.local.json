@@ -6,7 +6,10 @@
       "Bash(git commit *)",
       "mcp__supabase__deploy_edge_function",
       "PowerShell(Invoke-RestMethod \"https://suylrznbctrkbxbleapb.supabase.co/functions/v1/verify-device?phone=01099999999\" | ConvertTo-Json)",
-      "PowerShell(Invoke-RestMethod \"https://suylrznbctrkbxbleapb.supabase.co/functions/v1/verify-device?phone=01000000000\" | ConvertTo-Json)"
+      "PowerShell(Invoke-RestMethod \"https://suylrznbctrkbxbleapb.supabase.co/functions/v1/verify-device?phone=01000000000\" | ConvertTo-Json)",
+      "mcp__supabase__list_migrations",
+      "mcp__supabase__list_tables",
+      "mcp__supabase__get_project_url"
     ]
   }
 }

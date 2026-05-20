@@ -16,6 +16,9 @@ interface CallHistoryDao {
     @Query("SELECT * FROM call_history ORDER BY call_date DESC, call_time DESC")
     suspend fun getAll(): List<CallHistory>
 
+    @Query("SELECT * FROM call_history WHERE call_date = :date ORDER BY call_date DESC, call_time DESC")
+    suspend fun getByDate(date: String): List<CallHistory>
+
     @Query("SELECT * FROM call_history WHERE sync_status = 0")
     suspend fun getUnsynced(): List<CallHistory>
 

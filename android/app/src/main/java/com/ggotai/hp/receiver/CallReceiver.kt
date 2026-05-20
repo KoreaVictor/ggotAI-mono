@@ -7,12 +7,17 @@ import android.os.Build
 import android.telephony.TelephonyManager
 import android.util.Log
 import com.ggotai.hp.service.RecordingService
+import androidx.work.Data
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
+import com.ggotai.hp.worker.CallSyncWorker
+import java.util.concurrent.TimeUnit
 
 class CallReceiver : BroadcastReceiver() {
 
     companion object {
         private const val TAG = "CallReceiver"
-        private var lastState = TelephonyManager.EXTRA_STATE_IDLE
+        private var lastState = TelephonyManager.CALL_STATE_IDLE
         private var savedNumber: String? = null
     }
 
@@ -37,23 +42,22 @@ class CallReceiver : BroadcastReceiver() {
     }
 
     private fun onCallStateChanged(context: Context, state: Int, number: String?) {
-        if (lastState == stateStrToInt(TelephonyManager.EXTRA_STATE_IDLE) && state == TelephonyManager.CALL_STATE_RINGING) {
+        if (lastState == TelephonyManager.CALL_STATE_IDLE && state == TelephonyManager.CALL_STATE_RINGING) {
             // Incoming call ringing
-        } else if (lastState == stateStrToInt(TelephonyManager.EXTRA_STATE_RINGING) && state == TelephonyManager.CALL_STATE_OFFHOOK) {
+        } else if (lastState == TelephonyManager.CALL_STATE_RINGING && state == TelephonyManager.CALL_STATE_OFFHOOK) {
             // Incoming call answered
-            startRecordingService(context, number)
-        } else if (lastState == stateStrToInt(TelephonyManager.EXTRA_STATE_IDLE) && state == TelephonyManager.CALL_STATE_OFFHOOK) {
+        } else if (lastState == TelephonyManager.CALL_STATE_IDLE && state == TelephonyManager.CALL_STATE_OFFHOOK) {
             // Outgoing call started
-            startRecordingService(context, number)
         } else if (state == TelephonyManager.CALL_STATE_IDLE) {
             // Call ended (either incoming or outgoing)
             if (lastState == TelephonyManager.CALL_STATE_OFFHOOK) {
-                stopRecordingService(context)
+                // 통화가 방금 끝났으므로 파일 스캔 워커 예약
+                scheduleCallSyncWork(context, savedNumber)
             }
             savedNumber = null // Reset the number
         }
         
-        lastState = stateStrToInt(stateIntToStr(state))
+        lastState = state
     }
 
     private fun stateStrToInt(stateStr: String): Int {
@@ -74,30 +78,18 @@ class CallReceiver : BroadcastReceiver() {
         }
     }
 
-    private fun startRecordingService(context: Context, customerNumber: String?) {
-        Log.d(TAG, "Starting recording service for number: $customerNumber")
-        val serviceIntent = Intent(context, RecordingService::class.java).apply {
-            action = RecordingService.ACTION_START_RECORDING
-            putExtra(RecordingService.EXTRA_CUSTOMER_NUMBER, customerNumber ?: "Unknown")
-        }
+    private fun scheduleCallSyncWork(context: Context, customerNumber: String?) {
+        Log.d(TAG, "Scheduling call sync work via WorkManager for number: $customerNumber")
         
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
-        }
-    }
-
-    private fun stopRecordingService(context: Context) {
-        Log.d(TAG, "Stopping recording service")
-        val serviceIntent = Intent(context, RecordingService::class.java).apply {
-            action = RecordingService.ACTION_STOP_RECORDING
-        }
-        
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            context.startForegroundService(serviceIntent)
-        } else {
-            context.startService(serviceIntent)
-        }
+        val inputData = Data.Builder()
+            .putString(CallSyncWorker.KEY_CUSTOMER_NUMBER, customerNumber ?: "Unknown")
+            .build()
+            
+        val workRequest = OneTimeWorkRequestBuilder<CallSyncWorker>()
+            .setInitialDelay(8, TimeUnit.SECONDS) // 파일 쓰기 시간을 고려하여 5초에서 8초로 늘려 줌
+            .setInputData(inputData)
+            .build()
+            
+        WorkManager.getInstance(context).enqueue(workRequest)
     }
 }

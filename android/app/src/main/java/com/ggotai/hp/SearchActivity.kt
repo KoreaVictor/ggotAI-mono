@@ -1,6 +1,11 @@
 package com.ggotai.hp
 
 import android.app.DatePickerDialog
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.os.Build
 import android.os.Bundle
 import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
@@ -22,6 +27,14 @@ class SearchActivity : AppCompatActivity() {
     private lateinit var adapter: CallHistoryAdapter
     private var selectedDate: String? = null
 
+    private val updateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == "com.ggotai.hp.ACTION_UPDATE_HISTORY") {
+                performSearch()
+            }
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivitySearchBinding.inflate(layoutInflater)
@@ -34,7 +47,23 @@ class SearchActivity : AppCompatActivity() {
         // 기본 검색 (오늘 날짜, 전체)
         selectedDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
         binding.tvDate.text = selectedDate
-        performSearch()
+    }
+
+    override fun onResume() {
+        super.onResume()
+        performSearch() // 화면에 돌아올 때 자동으로 최신 검색 실행
+        
+        val filter = IntentFilter("com.ggotai.hp.ACTION_UPDATE_HISTORY")
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(updateReceiver, filter, Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(updateReceiver, filter)
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        unregisterReceiver(updateReceiver)
     }
 
     private fun setupToolbar() {

@@ -21,6 +21,7 @@ import kotlinx.coroutines.withContext
 class LoginActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityLoginBinding
+    private var isAuthenticating = false
 
     private val requestPermissionLauncher = registerForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -45,15 +46,37 @@ class LoginActivity : AppCompatActivity() {
         checkPermissions()
     }
 
+    override fun onResume() {
+        super.onResume()
+        // 설정 화면에서 권한을 허용하고 돌아왔을 때 이어서 진행
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (android.os.Environment.isExternalStorageManager()) {
+                checkPermissions()
+            }
+        }
+    }
+
     private fun checkPermissions() {
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            if (!android.os.Environment.isExternalStorageManager()) {
+                Toast.makeText(this, "통화 녹음 파일을 가져오기 위해 모든 파일 접근 권한을 허용해주세요.", Toast.LENGTH_LONG).show()
+                val intent = Intent(android.provider.Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION)
+                intent.data = android.net.Uri.parse("package:$packageName")
+                startActivity(intent)
+                return
+            }
+        }
+
         val requiredPermissions = mutableListOf(
             Manifest.permission.READ_PHONE_NUMBERS,
             Manifest.permission.READ_PHONE_STATE,
-            Manifest.permission.RECORD_AUDIO,
-            Manifest.permission.READ_CALL_LOG
+            Manifest.permission.READ_CALL_LOG,
+            Manifest.permission.READ_EXTERNAL_STORAGE,
+            Manifest.permission.READ_CONTACTS
         )
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)
+            requiredPermissions.add(Manifest.permission.READ_MEDIA_AUDIO)
         }
 
         val allGranted = requiredPermissions.all {
@@ -68,6 +91,9 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun extractPhoneNumberAndVerify() {
+        if (isAuthenticating) return
+        isAuthenticating = true
+        
         try {
             val telephonyManager = getSystemService(Context.TELEPHONY_SERVICE) as TelephonyManager
             var phoneNumber = ""
@@ -128,6 +154,7 @@ class LoginActivity : AppCompatActivity() {
     }
 
     private fun showError(message: String) {
+        isAuthenticating = false
         binding.progressBar.visibility = View.GONE
         binding.tvErrorMessage.visibility = View.VISIBLE
         binding.tvErrorMessage.text = message

@@ -20,9 +20,11 @@ class CallHistoryAdapter(private var historyList: List<CallHistory>) :
     private var playingUrl: String? = null
 
     class ViewHolder(view: View) : RecyclerView.ViewHolder(view) {
+        val tvNo: TextView = view.findViewById(R.id.tvNo)
         val tvCustomerName: TextView = view.findViewById(R.id.tvCustomerName)
         val tvPhoneNumber: TextView = view.findViewById(R.id.tvPhoneNumber)
-        val tvCallTime: TextView = view.findViewById(R.id.tvCallTime)
+        val tvCallDate: TextView = view.findViewById(R.id.tvCallDate)
+        val tvCallTimeShort: TextView = view.findViewById(R.id.tvCallTimeShort)
         val tvStatus: TextView = view.findViewById(R.id.tvStatus)
         val btnPlay: ImageView = view.findViewById(R.id.btnPlay)
     }
@@ -36,9 +38,30 @@ class CallHistoryAdapter(private var historyList: List<CallHistory>) :
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = historyList[position]
 
+        holder.tvNo.text = (position + 1).toString()
         holder.tvCustomerName.text = item.customerName
-        holder.tvPhoneNumber.text = item.phoneNumber
-        holder.tvCallTime.text = "${item.callDate} ${item.callTime}"
+        
+        val timeParts = item.callTime.split(":")
+        
+        // 실제 통화 시간(초)을 가독성 높게 포맷팅 (예: 37초, 1분 15초)
+        val durationSec = item.durationSeconds ?: 0
+        val durationText = when {
+            durationSec <= 0 -> "0초"
+            durationSec >= 60 -> {
+                val min = durationSec / 60
+                val sec = durationSec % 60
+                if (sec > 0) "${min}분 ${sec}초" else "${min}분"
+            }
+            else -> "${durationSec}초"
+        }
+        holder.tvPhoneNumber.text = "${item.phoneNumber} ($durationText)"
+
+        val formattedDate = item.callDate.replace("-", ".")
+        holder.tvCallDate.text = formattedDate
+
+        val timeShort = if (timeParts.size >= 2) "${timeParts[0]}:${timeParts[1]}" else item.callTime
+        holder.tvCallTimeShort.text = timeShort
+
         holder.tvStatus.text = item.transferStatus
 
         when (item.transferStatus) {

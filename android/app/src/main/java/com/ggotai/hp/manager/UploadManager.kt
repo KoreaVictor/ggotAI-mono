@@ -107,4 +107,8 @@ object UploadManager {
     private fun playTtsError() {
         tts?.speak("전송에 실패했습니다. 수동으로 재전송을 눌러주세요.", TextToSpeech.QUEUE_FLUSH, null, "UploadError")
     }
+
+    fun speak(message: String) {
+        tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "UploadMessage")
+    }
 }

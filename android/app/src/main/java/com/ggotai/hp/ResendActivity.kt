@@ -32,6 +32,10 @@ class ResendActivity : AppCompatActivity() {
         loadData()
 
         binding.btnResend.setOnClickListener {
+            if (binding.btnResend.text == "성공") {
+                finish()
+                return@setOnClickListener
+            }
             binding.btnResend.isEnabled = false
             binding.tvCurrentStatus.text = "현재 상태: 전송중"
             binding.tvCurrentStatus.setTextColor(android.graphics.Color.parseColor("#757575")) // Gray
@@ -50,6 +54,7 @@ class ResendActivity : AppCompatActivity() {
                     binding.tvCurrentStatus.setTextColor(android.graphics.Color.parseColor("#212121")) // Black
                     binding.tvErrorLog.text = "에러 로그: -"
                     binding.btnResend.text = "성공"
+                    binding.btnResend.isEnabled = true
                 } else {
                     binding.btnResend.isEnabled = true
                     binding.tvCurrentStatus.text = "현재 상태: ${updatedHistory?.transferStatus ?: "전송실패"}"
@@ -70,7 +75,18 @@ class ResendActivity : AppCompatActivity() {
             if (history != null) {
                 binding.tvTargetInfo.text = "고객: ${history.customerName} (${history.phoneNumber})"
                 binding.tvCurrentStatus.text = "현재 상태: ${history.transferStatus}"
-                binding.tvErrorLog.text = "에러 로그: ${history.errorCode ?: ""} - ${history.errorMessage ?: "없음"}"
+                
+                if (history.transferStatus == "성공") {
+                    binding.tvCurrentStatus.setTextColor(android.graphics.Color.parseColor("#212121")) // Black
+                    binding.tvErrorLog.text = "에러 로그: -"
+                    binding.btnResend.text = "성공"
+                    binding.btnResend.isEnabled = true
+                } else {
+                    binding.tvCurrentStatus.setTextColor(android.graphics.Color.parseColor("#D50000")) // Red
+                    binding.tvErrorLog.text = "에러 로그: ${history.errorCode ?: ""} - ${history.errorMessage ?: "없음"}"
+                    binding.btnResend.text = "재전송"
+                    binding.btnResend.isEnabled = true
+                }
             } else {
                 finish()
             }

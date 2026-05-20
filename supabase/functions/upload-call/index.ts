@@ -67,27 +67,7 @@ Deno.serve(async (req: Request) => {
     const yyyyMM = callDate.substring(0, 7).replace("-", "");
     const storagePath = `${userPhoneNumber}/${yyyyMM}/${fileName}`;
 
-    // Supabase Storage 업로드
-    const audioBuffer = await audioFile.arrayBuffer();
-    const { error: storageError } = await supabase.storage
-      .from("audio-files")
-      .upload(storagePath, audioBuffer, {
-        contentType: "audio/wav",
-        upsert: false,
-      });
-
-    if (storageError) {
-      return new Response(
-        JSON.stringify({
-          status: "error",
-          error_code: "SERVER_500",
-          message: "파일 저장 중 오류가 발생했습니다.",
-        }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    // server_call_history DB 적재
+    // 1단계: DB 먼저 적재 (Storage 업로드 전에 실행하여 고아 파일 방지)
     const { error: dbError } = await supabase.from("server_call_history").insert({
       user_phone_number: userPhoneNumber,
       shop_name: member.shop_name,
@@ -100,6 +80,7 @@ Deno.serve(async (req: Request) => {
     });
 
     if (dbError) {
+      console.error("DB insert error:", JSON.stringify(dbError));
       return new Response(
         JSON.stringify({
           status: "error",
@@ -110,11 +91,39 @@ Deno.serve(async (req: Request) => {
       );
     }
 
+    // 2단계: DB 성공 후 Storage 업로드
+    const audioBuffer = await audioFile.arrayBuffer();
+    const { error: storageError } = await supabase.storage
+      .from("audio-files")
+      .upload(storagePath, audioBuffer, {
+        contentType: "audio/wav",
+        upsert: false,
+      });
+
+    if (storageError) {
+      console.error("Storage upload error:", JSON.stringify(storageError));
+      // 롤백: 방금 삽입한 DB 레코드 삭제
+      await supabase
+        .from("server_call_history")
+        .delete()
+        .eq("audio_file_name", fileName)
+        .eq("user_phone_number", userPhoneNumber);
+      return new Response(
+        JSON.stringify({
+          status: "error",
+          error_code: "SERVER_500",
+          message: "파일 저장 중 오류가 발생했습니다.",
+        }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     return new Response(
       JSON.stringify({ status: "success", message: "업로드 성공" }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (_err) {
+    console.error("Unhandled exception:", _err);
     return new Response(
       JSON.stringify({
         status: "error",

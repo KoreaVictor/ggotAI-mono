@@ -9,7 +9,11 @@
       "PowerShell(Invoke-RestMethod \"https://suylrznbctrkbxbleapb.supabase.co/functions/v1/verify-device?phone=01000000000\" | ConvertTo-Json)",
       "mcp__supabase__list_migrations",
       "mcp__supabase__list_tables",
-      "mcp__supabase__get_project_url"
+      "mcp__supabase__get_project_url",
+      "Bash(git restore *)",
+      "Bash(git push *)",
+      "mcp__supabase__get_logs",
+      "mcp__supabase__list_edge_functions"
     ]
   }
 }

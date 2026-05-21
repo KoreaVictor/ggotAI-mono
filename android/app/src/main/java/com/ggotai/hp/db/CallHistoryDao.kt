@@ -24,4 +24,7 @@ interface CallHistoryDao {
 
     @Query("UPDATE call_history SET transfer_status = '실패', error_code = 'APP_KILLED' WHERE transfer_status = '전송중'")
     suspend fun markPendingAsFailed()
+
+    @androidx.room.Delete
+    suspend fun delete(callHistory: CallHistory)
 }

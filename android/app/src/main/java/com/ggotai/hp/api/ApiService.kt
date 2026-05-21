@@ -23,6 +23,17 @@ data class UploadCallResponse(
     val error_code: String?
 )
 
+data class DeleteCallRequest(
+    val user_phone_number: String,
+    val audio_file_name: String
+)
+
+data class DeleteCallResponse(
+    val status: String,
+    val message: String?,
+    val error_code: String?
+)
+
 interface ApiService {
     @GET("verify-device")
     suspend fun verifyDevice(@Query("phone") phone: String): Response<VerifyDeviceResponse>
@@ -38,4 +49,9 @@ interface ApiService {
         @retrofit2.http.Part("duration_seconds") durationSeconds: okhttp3.RequestBody,
         @retrofit2.http.Part audioFile: okhttp3.MultipartBody.Part
     ): Response<UploadCallResponse>
+
+    @retrofit2.http.POST("delete-call")
+    suspend fun deleteCall(
+        @retrofit2.http.Body request: DeleteCallRequest
+    ): Response<DeleteCallResponse>
 }

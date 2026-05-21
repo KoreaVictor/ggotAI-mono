@@ -32,9 +32,6 @@
             android:name=".MainActivity"
             android:exported="false" />
         <activity
-            android:name=".SearchActivity"
-            android:exported="false" />
-        <activity
             android:name=".ResendActivity"
             android:theme="@style/Theme.AppCompat.Dialog"
             android:exported="false" />

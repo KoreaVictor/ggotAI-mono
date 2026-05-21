@@ -67,6 +67,28 @@ Deno.serve(async (req: Request) => {
     const yyyyMM = callDate.substring(0, 7).replace("-", "");
     const storagePath = `${userPhoneNumber}/${yyyyMM}/${fileName}`;
 
+    // [멱등성 보장 - 대안 A] 이미 동일한 통화 데이터가 존재하는지 pre-check
+    const { data: existingCall, error: checkError } = await supabase
+      .from("server_call_history")
+      .select("id")
+      .eq("user_phone_number", userPhoneNumber)
+      .eq("phone_number", phoneNumber)
+      .eq("call_date", callDate)
+      .eq("call_time", callTime)
+      .maybeSingle();
+
+    if (checkError) {
+      console.error("Duplicate check query error:", JSON.stringify(checkError));
+    }
+
+    if (existingCall) {
+      console.log(`[Idempotency] Duplicate call detected for ${fileName}. Skipping upload and returning success.`);
+      return new Response(
+        JSON.stringify({ status: "success", message: "이미 업로드 완료된 건입니다. (Idempotency 보장)" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // 1단계: DB 먼저 적재 (Storage 업로드 전에 실행하여 고아 파일 방지)
     const { error: dbError } = await supabase.from("server_call_history").insert({
       user_phone_number: userPhoneNumber,

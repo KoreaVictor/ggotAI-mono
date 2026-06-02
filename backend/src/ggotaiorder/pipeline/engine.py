@@ -47,8 +47,8 @@ def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
             extraction.customer_phone_number or row.customer_phone_number or ""
         ),
         "product_name": extraction.product_name,
-        "quantity": extraction.quantity or 1,
-        "price": extraction.price or 0,
+        "quantity": extraction.quantity if extraction.quantity is not None else 1,
+        "price": extraction.price if extraction.price is not None else 0,
         "delivery_at": extraction.delivery_at,
         "delivery_place": extraction.delivery_place,
         "receiver_name": extraction.receiver_name,

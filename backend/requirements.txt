@@ -16,6 +16,7 @@ APScheduler
 # --- AI 파이프라인 ---
 faster-whisper
 google-genai
+pydantic
 
 # --- 웹 자동화 ---
 playwright
@@ -35,3 +36,4 @@ httpx
 
 # --- 개발/테스트 ---
 pytest
+pytest-asyncio

@@ -45,8 +45,14 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         raise ConfigError(f"필수 환경변수 누락/공백: {', '.join(missing)}")
 
     aes_key = env["AES_ENCRYPTION_KEY"]
-    if len(aes_key.encode("utf-8")) != 32:
-        raise ConfigError("AES_ENCRYPTION_KEY 는 UTF-8 기준 정확히 32바이트여야 합니다.")
+    try:
+        aes_key_byte_len = len(bytes.fromhex(aes_key))
+    except ValueError:
+        raise ConfigError("AES_ENCRYPTION_KEY 는 16진수(hex) 문자열이어야 합니다.")
+    if aes_key_byte_len != 32:
+        raise ConfigError(
+            "AES_ENCRYPTION_KEY 는 hex 디코딩 시 정확히 32바이트(64 hex chars)여야 합니다."
+        )
 
     return Config(
         supabase_url=env["SUPABASE_URL"],

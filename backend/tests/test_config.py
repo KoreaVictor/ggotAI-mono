@@ -6,7 +6,7 @@ VALID = {
     "SUPABASE_URL": "https://example.supabase.co",
     "SUPABASE_ANON_KEY": "anon-key",
     "SUPABASE_SERVICE_ROLE_KEY": "service-key",
-    "AES_ENCRYPTION_KEY": "0123456789abcdef0123456789abcdef",  # 32 bytes
+    "AES_ENCRYPTION_KEY": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",  # 64 hex -> 32 bytes
 }
 
 
@@ -32,6 +32,6 @@ def test_empty_key_raises():
 
 
 def test_aes_key_must_be_32_bytes():
-    broken = dict(VALID, AES_ENCRYPTION_KEY="too-short")
+    broken = dict(VALID, AES_ENCRYPTION_KEY="0123456789abcdef")
     with pytest.raises(ConfigError):
         load_config(env=broken)

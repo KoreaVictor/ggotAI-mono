@@ -39,7 +39,13 @@ class GgotAIOrderService(win32serviceutil.ServiceFramework):
         """SCM 정지 요청 처리 (net stop)."""
         self.ReportServiceStatus(win32service.SERVICE_STOP_PENDING)
         if self._loop is not None and self._orchestrator is not None:
-            asyncio.run_coroutine_threadsafe(self._orchestrator.stop(), self._loop)
+            future = asyncio.run_coroutine_threadsafe(
+                self._orchestrator.stop(), self._loop
+            )
+            try:
+                future.result(timeout=25)  # SCM 기본 30초 데드라인 내 정상 종료 대기
+            except Exception:
+                logger.exception("오케스트레이터 정상 종료 실패")
         win32event.SetEvent(self._stop_event)
 
     def SvcDoRun(self) -> None:
@@ -53,8 +59,12 @@ class GgotAIOrderService(win32serviceutil.ServiceFramework):
         self._loop = asyncio.new_event_loop()
         asyncio.set_event_loop(self._loop)
         self._orchestrator = Orchestrator()
+        self.ReportServiceStatus(win32service.SERVICE_RUNNING)
         try:
             self._loop.run_until_complete(self._orchestrator.start())
+        except Exception:
+            logger.exception("서비스 실행 중 오류")
+            raise
         finally:
             self._loop.close()
 

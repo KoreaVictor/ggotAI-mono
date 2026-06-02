@@ -1,9 +1,10 @@
 import os
+from pathlib import Path
 
 import pytest
 from dotenv import load_dotenv
 
-load_dotenv("backend/.env")
+load_dotenv(Path(__file__).resolve().parents[1] / ".env")
 
 # 기본 실행에서는 skip. 실제 Gemini 호출 검증은 RUN_LIVE_GEMINI=1 일 때만.
 pytestmark = pytest.mark.skipif(

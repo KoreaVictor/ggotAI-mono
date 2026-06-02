@@ -1,3 +1,5 @@
+import pytest
+
 from ggotaiorder.core.crypto import decrypt, encrypt
 
 # cryptography(AES-256-CBC/PKCS7)로 실제 생성·검증한 고정 벡터.
@@ -22,3 +24,14 @@ def test_round_trip_random_iv():
     assert decrypt(blob, KEY) == "배달장소 서울시 강남구"
     # 랜덤 IV 이므로 매 호출 결과가 달라야 한다
     assert encrypt("x", KEY) != encrypt("x", KEY)
+
+
+def test_wrong_key_length_raises():
+    with pytest.raises(ValueError):
+        decrypt(DB_VALUE, "short-key")
+
+
+def test_decrypt_bad_iv_length_raises():
+    bad = "00112233:trOEJkzSStKQyv6HIunOxw=="  # 4-byte IV
+    with pytest.raises(ValueError):
+        decrypt(bad, KEY)

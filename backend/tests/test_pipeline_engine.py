@@ -62,6 +62,15 @@ async def test_order_path_inserts_and_enqueues(monkeypatch):
     assert "insert" in kinds
     assert enqueued == [999]
 
+    insert_payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    assert insert_payload["product_name"] == "장미"
+    assert insert_payload["quantity"] == 2
+    assert insert_payload["price"] == 50000
+    assert insert_payload["receiver_name"] == "이영희"
+    assert insert_payload["call_history_id"] == 1
+    assert insert_payload["shop_key"] == 2
+    assert insert_payload["rpa_status"] == "ready"
+
 
 async def test_non_order_path_sets_N_and_no_insert(monkeypatch):
     repo = FakeRepo(_row(audio_file_name="call_001.wav"))

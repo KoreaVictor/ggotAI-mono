@@ -17,7 +17,7 @@ async def _main() -> None:
     orch = Orchestrator()
     try:
         await orch.start()
-    except (KeyboardInterrupt, asyncio.CancelledError):
+    finally:
         await orch.stop()
 
 

@@ -37,6 +37,14 @@ net stop ggotAIorder
 backend\.venv\Scripts\python.exe -m pytest backend/tests -v
 ```
 
+### Gemini 라이브 테스트 (선택)
+
+실제 Gemini API를 호출하는 추출 테스트는 기본적으로 skip됩니다. 실제 호출로 검증하려면:
+```powershell
+$env:RUN_LIVE_GEMINI="1"; backend\.venv\Scripts\python.exe -m pytest backend/tests/test_pipeline_extractor_live.py -v
+```
+`GEMINI_API_KEY`가 `backend/.env`에 있어야 합니다.
+
 ## 구조
 
 - `config` / `logging_setup` / `core/crypto` / `core/supabase_client` — 핵심 코어(실로직)

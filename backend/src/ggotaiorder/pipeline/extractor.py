@@ -1,0 +1,70 @@
+"""Gemini 기반 주문 정형화 추출 (google-genai 구조화 출력).
+
+stt_text → OrderExtraction(11필드). 입력에 없는 값은 절대 추측하지 않고 None.
+"""
+
+from __future__ import annotations
+
+import logging
+import time
+
+from google import genai
+from google.genai import types
+
+from ggotaiorder.config import load_config
+from ggotaiorder.pipeline.models import OrderExtraction
+
+logger = logging.getLogger(__name__)
+
+GEMINI_MODEL = "gemini-2.5-flash"
+
+_SYSTEM_INSTRUCTION = (
+    "너는 꽃집 주문 통화/텍스트에서 주문 정보를 추출하는 엄격한 추출기다.\n"
+    "규칙:\n"
+    "1. 입력에 명시적으로 나타난 값만 채운다.\n"
+    "2. 언급되지 않았거나 불확실하면 반드시 null. 추측·창작 금지.\n"
+    "3. 예시/기본값(홍길동, 010-1234-5678 등)을 임의로 넣지 마라.\n"
+    "4. 꽃 주문이 아니면(음식주문/잡담/광고 등) 모든 필드를 null.\n"
+    "5. 가격은 '5만원'->50000 처럼 원 단위 정수로 변환."
+)
+
+_client: genai.Client | None = None
+
+
+def _get_client() -> genai.Client:
+    global _client
+    if _client is None:
+        _client = genai.Client(api_key=load_config().gemini_api_key)
+    return _client
+
+
+def extract_order(stt_text: str, *, max_retries: int = 3) -> OrderExtraction:
+    """stt_text 에서 11개 주문 필드를 구조화 추출한다.
+
+    일시적 오류(예: 503)는 재시도하며, 끝내 실패하면 RuntimeError.
+    """
+    client = _get_client()
+    config = types.GenerateContentConfig(
+        system_instruction=_SYSTEM_INSTRUCTION,
+        response_mime_type="application/json",
+        response_schema=OrderExtraction,
+        temperature=0,
+    )
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        try:
+            resp = client.models.generate_content(
+                model=GEMINI_MODEL, contents="입력:\n" + stt_text, config=config
+            )
+            parsed = resp.parsed
+            if isinstance(parsed, OrderExtraction):
+                return parsed
+            return OrderExtraction.model_validate_json(resp.text)
+        except Exception as exc:  # noqa: BLE001 - 외부 API 오류 일괄 처리
+            last_error = exc
+            logger.warning(
+                "Gemini 추출 시도 %s/%s 실패: %s",
+                attempt + 1, max_retries, str(exc)[:120],
+            )
+            time.sleep(2 * (attempt + 1))
+    raise RuntimeError(f"Gemini 추출 실패(재시도 {max_retries}회 초과): {last_error}")

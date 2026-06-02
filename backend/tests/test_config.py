@@ -7,6 +7,7 @@ VALID = {
     "SUPABASE_ANON_KEY": "anon-key",
     "SUPABASE_SERVICE_ROLE_KEY": "service-key",
     "AES_ENCRYPTION_KEY": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",  # 64 hex -> 32 bytes
+    "GEMINI_API_KEY": "test-gemini-key",
 }
 
 
@@ -16,11 +17,19 @@ def test_load_config_returns_values():
     assert cfg.supabase_url == "https://example.supabase.co"
     assert cfg.supabase_service_role_key == "service-key"
     assert cfg.aes_encryption_key == VALID["AES_ENCRYPTION_KEY"]
+    assert cfg.gemini_api_key == "test-gemini-key"
 
 
 def test_missing_key_raises():
     broken = dict(VALID)
     del broken["SUPABASE_URL"]
+    with pytest.raises(ConfigError):
+        load_config(env=broken)
+
+
+def test_missing_gemini_key_raises():
+    broken = dict(VALID)
+    del broken["GEMINI_API_KEY"]
     with pytest.raises(ConfigError):
         load_config(env=broken)
 
@@ -32,6 +41,6 @@ def test_empty_key_raises():
 
 
 def test_aes_key_must_be_32_bytes():
-    broken = dict(VALID, AES_ENCRYPTION_KEY="0123456789abcdef")
+    broken = dict(VALID, AES_ENCRYPTION_KEY="0123456789abcdef")  # valid hex, 8 bytes
     with pytest.raises(ConfigError):
         load_config(env=broken)

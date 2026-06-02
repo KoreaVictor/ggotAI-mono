@@ -14,6 +14,7 @@ _REQUIRED_KEYS = (
     "SUPABASE_ANON_KEY",
     "SUPABASE_SERVICE_ROLE_KEY",
     "AES_ENCRYPTION_KEY",
+    "GEMINI_API_KEY",
 )
 
 
@@ -27,6 +28,7 @@ class Config:
     supabase_anon_key: str
     supabase_service_role_key: str
     aes_encryption_key: str
+    gemini_api_key: str
 
 
 def load_config(env: Mapping[str, str] | None = None) -> Config:
@@ -59,4 +61,5 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         supabase_anon_key=env["SUPABASE_ANON_KEY"],
         supabase_service_role_key=env["SUPABASE_SERVICE_ROLE_KEY"],
         aes_encryption_key=aes_key,
+        gemini_api_key=env["GEMINI_API_KEY"],
     )

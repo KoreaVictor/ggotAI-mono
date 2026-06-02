@@ -15,7 +15,7 @@ APScheduler
 
 # --- AI 파이프라인 ---
 faster-whisper
-google-generativeai
+google-genai
 
 # --- 웹 자동화 ---
 playwright

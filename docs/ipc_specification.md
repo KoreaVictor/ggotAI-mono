@@ -80,14 +80,16 @@ sc query ggotAIorder
 
 * **알고리즘**: `AES-256-CBC`
 * **패딩(Padding)**: `PKCS7`
-* **키(Key)**: 32바이트 길이의 문자열 (환경변수 `SUPABASE_SECRET_KEY`를 키로 공유)
+* **키(Key)**: 64자 16진수(hex) 문자열을 디코딩한 32바이트 (환경변수의 AES 키를 공유)
 * **초기화 벡터(IV)**: 16바이트 랜덤 값 (암호화 결과물 맨 앞에 붙여서 Base64 인코딩하여 DB에 저장)
+
+> 프론트엔드(crypto-js)와 백엔드(Python) 모두 키를 hex로 디코딩하여 사용해야 호환됩니다.
 
 #### JavaScript 암호화 예시 (`crypto-js`)
 ```javascript
 import CryptoJS from 'crypto-js';
 
-const key = CryptoJS.enc.Utf8.parse(process.env.SUPABASE_SECRET_KEY);
+const key = CryptoJS.enc.Hex.parse(process.env.VITE_AES_ENCRYPTION_KEY);
 const iv = CryptoJS.lib.WordArray.random(16);
 
 const encrypted = CryptoJS.AES.encrypt("plain_password", key, {
@@ -110,7 +112,7 @@ from cryptography.hazmat.backends import default_backend
 db_value = "iv_hex:encrypted_base64"  # DB에서 조회한 값
 iv_hex, encrypted_base64 = db_value.split(":")
 
-key = os.getenv("SUPABASE_SECRET_KEY").encode('utf-8')
+key = bytes.fromhex(os.getenv("AES_ENCRYPTION_KEY"))
 iv = bytes.fromhex(iv_hex)
 encrypted_data = base64.b64decode(encrypted_base64)
 

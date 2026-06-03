@@ -1,21 +1,62 @@
-"""음성→텍스트(STT) 인터페이스 (faster-whisper 실연동은 다음 증분).
+"""음성→텍스트(STT): Supabase Storage 음성 다운로드 후 faster-whisper 한국어 변환.
 
-이번 증분에서는 인터페이스만 고정하고, 호출 시 NotImplementedError 를 던진다.
-engine.process 는 이 예외를 잡아 해당 건을 건너뛴다(파이프라인 비중단).
+faster_whisper 는 _get_model 내부에서 지연 import 한다. ctranslate2 네이티브 의존이
+모듈 import 시점에 로드되지 않게 하여, 오프라인 테스트와 타 모듈의 import 안전성을 보장한다.
+설정은 환경변수로 조정한다(기본 small/int8/cpu).
 """
 
 from __future__ import annotations
 
 import logging
+import os
+import tempfile
+from pathlib import PurePosixPath
+
+from ggotaiorder.api.storage import AUDIO_BUCKET
+from ggotaiorder.core.supabase_client import get_client
 
 logger = logging.getLogger(__name__)
 
+_model = None
+
+
+def _get_model():
+    """faster-whisper WhisperModel 싱글턴(지연 생성·지연 import)."""
+    global _model
+    if _model is None:
+        from faster_whisper import WhisperModel
+
+        model_name = os.getenv("STT_MODEL", "small")
+        compute_type = os.getenv("STT_COMPUTE_TYPE", "int8")
+        device = os.getenv("STT_DEVICE", "cpu")
+        logger.info(
+            "faster-whisper 모델 로드: %s (device=%s, compute=%s)",
+            model_name, device, compute_type,
+        )
+        _model = WhisperModel(model_name, device=device, compute_type=compute_type)
+    return _model
+
+
+def _download_audio(object_name: str) -> bytes:
+    """call-audio 버킷에서 음성 파일 바이트를 내려받는다."""
+    return get_client().storage.from_(AUDIO_BUCKET).download(object_name)
+
 
 def transcribe(audio_file_name: str) -> str:
-    """[스텁] 음성 파일을 텍스트로 변환한다.
+    """Storage의 음성 파일을 한국어 텍스트로 변환해 반환한다.
 
-    TODO(다음 증분): Supabase Storage에서 audio_file_name 다운로드 →
-    faster-whisper(한국어)로 STT → 텍스트 반환.
+    audio_file_name: Storage 객체명(예: '{shop_key}/{uuid}.wav').
     """
-    logger.warning("[STUB] stt.transcribe 미구현: %s", audio_file_name)
-    raise NotImplementedError("STT(faster-whisper)는 다음 증분에서 구현됩니다.")
+    data = _download_audio(audio_file_name)
+    suffix = PurePosixPath(audio_file_name).suffix or ".wav"
+    tmp = tempfile.NamedTemporaryFile(suffix=suffix, delete=False)
+    try:
+        tmp.write(data)
+        tmp.close()
+        segments, _info = _get_model().transcribe(tmp.name, language="ko")
+        return " ".join(segment.text.strip() for segment in segments).strip()
+    finally:
+        try:
+            os.unlink(tmp.name)
+        except OSError:
+            pass

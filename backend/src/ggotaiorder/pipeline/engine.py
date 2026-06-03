@@ -7,6 +7,7 @@ STT(음성→텍스트)는 stt.transcribe 인터페이스로 위임(현재 스�
 
 from __future__ import annotations
 
+import asyncio
 import logging
 
 from ggotaiorder.pipeline.extractor import extract_order
@@ -76,10 +77,10 @@ async def process(call_history_id: int, repo: OrderRepository | None = None) -> 
     if not stt_text:
         if row.audio_file_name and row.audio_file_name != INTRANET_AUDIO_MARKER:
             try:
-                stt_text = transcribe(row.audio_file_name)
+                stt_text = await asyncio.to_thread(transcribe, row.audio_file_name)
                 repo.update_stt_text(call_history_id, stt_text)
-            except NotImplementedError:
-                logger.warning("STT 미구현 — 건너뜀 id=%s", call_history_id)
+            except Exception:
+                logger.exception("STT 처리 실패 — 건너뜀 id=%s", call_history_id)
                 return
         else:
             logger.warning("stt_text 없음 — 건너뜀 id=%s", call_history_id)

@@ -85,15 +85,39 @@ async def test_non_order_path_sets_N_and_no_insert(monkeypatch):
     assert ("delete_audio", "call_001.wav") in repo.calls
 
 
-async def test_stt_needed_but_stub_skips(monkeypatch):
+async def test_stt_path_transcribes_then_processes(monkeypatch):
     repo = FakeRepo(_row(stt_text=None, audio_file_name="call_002.wav"))
+    monkeypatch.setattr(engine, "transcribe", lambda name: "변환된 주문 텍스트")
+    monkeypatch.setattr(engine, "extract_order", lambda text: _full_extraction())
+    enqueued: list[int] = []
+
+    async def fake_enqueue(order_id: int) -> None:
+        enqueued.append(order_id)
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    kinds = [c[0] for c in repo.calls]
+    assert ("update_stt", 1, "변환된 주문 텍스트") in repo.calls
+    assert "insert" in kinds
+    assert enqueued == [999]
+
+
+async def test_stt_failure_skips(monkeypatch):
+    repo = FakeRepo(_row(stt_text=None, audio_file_name="call_003.wav"))
+
+    def boom(name):
+        raise RuntimeError("stt fail")
+
     called = {"extract": False}
 
-    def boom(text):
+    def spy_extract(text):
         called["extract"] = True
         return _full_extraction()
 
-    monkeypatch.setattr(engine, "extract_order", boom)
+    monkeypatch.setattr(engine, "transcribe", boom)
+    monkeypatch.setattr(engine, "extract_order", spy_extract)
     monkeypatch.setattr(engine, "enqueue", lambda order_id: None)
 
     await engine.process(1, repo=repo)

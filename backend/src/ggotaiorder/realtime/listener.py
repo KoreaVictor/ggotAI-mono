@@ -24,6 +24,7 @@ class RealtimeListener:
 
     def __init__(self) -> None:
         self._channel = None
+        self._tasks: set[asyncio.Task] = set()
 
     async def start(self) -> None:
         """Realtime 채널 구독을 시작한다 (라이브 검증은 체크리스트)."""
@@ -63,7 +64,9 @@ class RealtimeListener:
         channel = record.get("channel_order")
         call_history_id = record.get("id")
         if channel in _REALTIME_CHANNELS and call_history_id is not None:
-            asyncio.create_task(process(call_history_id))
+            task = asyncio.create_task(process(call_history_id))
+            self._tasks.add(task)
+            task.add_done_callback(self._tasks.discard)
         else:
             logger.debug(
                 "Realtime skip: channel=%s id=%s", channel, call_history_id

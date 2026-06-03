@@ -45,6 +45,15 @@ $env:RUN_LIVE_GEMINI="1"; backend\.venv\Scripts\python.exe -m pytest backend/tes
 ```
 `GEMINI_API_KEY`가 `backend/.env`에 있어야 합니다.
 
+## 인입 경로 라이브 구동 체크리스트
+
+api Webhook·Realtime은 코드로 구현·오프라인 테스트되었으나, 실제 동작에는 다음 인프라가 필요합니다(인프라 준비 시 수행):
+
+1. Supabase Storage에 비공개 버킷 `call-audio` 생성.
+2. `server_call_history` 테이블 Realtime(Replication) 활성화.
+3. `run_dev.py` 기동 후 멀티파트 업로드 → server_call_history 행 + order_details 생성 확인.
+4. '핸드폰' 채널 행 INSERT(모바일 앱/수동) → Realtime이 process 트리거하는지 확인.
+
 ## 구조
 
 - `config` / `logging_setup` / `core/crypto` / `core/supabase_client` — 핵심 코어(실로직)

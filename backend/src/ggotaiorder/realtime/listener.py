@@ -56,8 +56,18 @@ class RealtimeListener:
             )
             if record:
                 self._process_record(record)
+            else:
+                logger.warning("Realtime 메시지에서 record 추출 실패(빈/누락): %s", payload)
         except Exception:  # noqa: BLE001 - 구독 유지를 위해 콜백 예외 흡수
             logger.exception("Realtime 콜백 처리 실패")
+
+    def _on_task_done(self, task: "asyncio.Task") -> None:
+        """완료된 process 태스크를 정리하고, 실패 시 즉시 로깅한다."""
+        self._tasks.discard(task)
+        if not task.cancelled() and task.exception() is not None:
+            logger.error(
+                "Realtime process 태스크 실패", exc_info=task.exception()
+            )
 
     def _process_record(self, record: dict) -> None:
         """채널이 핸드폰/가게음성이면 process(id)를 예약한다."""
@@ -66,7 +76,7 @@ class RealtimeListener:
         if channel in _REALTIME_CHANNELS and call_history_id is not None:
             task = asyncio.create_task(process(call_history_id))
             self._tasks.add(task)
-            task.add_done_callback(self._tasks.discard)
+            task.add_done_callback(self._on_task_done)
         else:
             logger.debug(
                 "Realtime skip: channel=%s id=%s", channel, call_history_id

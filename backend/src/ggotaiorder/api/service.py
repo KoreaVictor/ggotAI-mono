@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
@@ -26,12 +27,12 @@ async def ingest_gate_phone(
 
     샵을 판별하지 못하면 None(라우트가 400). 성공 시 새 call_history_id.
     """
-    shop = repo.find_shop_by_phone(user_phone_number)
+    shop = await asyncio.to_thread(repo.find_shop_by_phone, user_phone_number)
     if shop is None:
         logger.warning("샵 판별 실패 — user_phone_number=%s", user_phone_number)
         return None
 
-    object_name = storage.upload_audio(file_bytes, shop.shop_key, filename)
+    object_name = await asyncio.to_thread(storage.upload_audio, file_bytes, shop.shop_key, filename)
     now = datetime.now()
     record = {
         "channel_order": "가게전화",
@@ -45,4 +46,4 @@ async def ingest_gate_phone(
         "audio_file_name": object_name,
         "is_order": "N",
     }
-    return repo.insert_call_history(record)
+    return await asyncio.to_thread(repo.insert_call_history, record)

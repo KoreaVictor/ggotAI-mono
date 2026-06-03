@@ -28,31 +28,44 @@ class IngestRepository(Protocol):
 class SupabaseIngestRepository:
     """Supabase 기반 IngestRepository 구현."""
 
+    _SETTING_PHONE_COLUMNS = (
+        "order_landline_1",
+        "order_landline_2",
+        "order_hp_1",
+        "order_hp_2",
+    )
+    _MEMBER_PHONE_COLUMNS = ("landline_number", "mobile_number")
+
     def find_shop_by_phone(self, phone: str) -> Optional[Shop]:
         client = get_client()
-        # 1) setting_info 주문 전화번호(주문핸드폰/일반전화)에서 shop_key 탐색
-        setting = (
-            client.table("setting_info")
-            .select("shop_key")
-            .or_(
-                f"order_landline_1.eq.{phone},order_landline_2.eq.{phone},"
-                f"order_hp_1.eq.{phone},order_hp_2.eq.{phone}"
-            )
-            .limit(1)
-            .execute()
-        )
-        shop_key: Optional[int] = setting.data[0]["shop_key"] if setting.data else None
 
-        # 2) 폴백: member_info 가게전화/대표 핸드폰
-        if shop_key is None:
-            member = (
-                client.table("member_info")
-                .select("id")
-                .or_(f"landline_number.eq.{phone},mobile_number.eq.{phone}")
+        # 1) setting_info 주문 전화번호(주문핸드폰/일반전화)에서 shop_key 탐색
+        shop_key: Optional[int] = None
+        for column in self._SETTING_PHONE_COLUMNS:
+            res = (
+                client.table("setting_info")
+                .select("shop_key")
+                .eq(column, phone)
                 .limit(1)
                 .execute()
             )
-            shop_key = member.data[0]["id"] if member.data else None
+            if res.data:
+                shop_key = res.data[0]["shop_key"]
+                break
+
+        # 2) 폴백: member_info 가게전화/대표 핸드폰
+        if shop_key is None:
+            for column in self._MEMBER_PHONE_COLUMNS:
+                res = (
+                    client.table("member_info")
+                    .select("id")
+                    .eq(column, phone)
+                    .limit(1)
+                    .execute()
+                )
+                if res.data:
+                    shop_key = res.data[0]["id"]
+                    break
 
         if shop_key is None:
             return None
@@ -62,11 +75,15 @@ class SupabaseIngestRepository:
             client.table("member_info")
             .select("shop_name")
             .eq("id", shop_key)
-            .single()
+            .limit(1)
             .execute()
         )
-        return Shop(shop_key=shop_key, shop_name=info.data["shop_name"])
+        if not info.data:
+            return None
+        return Shop(shop_key=shop_key, shop_name=info.data[0]["shop_name"])
 
     def insert_call_history(self, record: dict) -> int:
         res = get_client().table("server_call_history").insert(record).execute()
+        if not res.data:
+            raise RuntimeError("server_call_history INSERT가 행을 반환하지 않았습니다.")
         return res.data[0]["id"]

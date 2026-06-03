@@ -41,4 +41,4 @@ def test_transcribe_empty_segments_returns_empty(monkeypatch):
 
 def test_module_import_does_not_require_faster_whisper():
     import sys
-    assert "faster_whisper" not in sys.modules or stt_mod._model is None
+    assert "faster_whisper" not in sys.modules

@@ -90,3 +90,17 @@ async def test_provider_exception_returns_false():
     provider = FakeProvider(raises=True)
     result = await send(2, "핸드폰", 1, True, repo=repo, provider=provider)
     assert result is False
+
+
+async def test_empty_template_skips_and_returns_false():
+    repo = FakeRepo(_settings(rpa_success_message="", rpa_fail_message=""))
+    provider = FakeProvider()
+    result = await send(2, "핸드폰", 1, True, repo=repo, provider=provider)
+    assert result is False
+    assert provider.sent == []
+
+
+def test_mask_exposes_last_4_digits_only():
+    from ggotaiorder.notifier.sms_sender import _mask
+    assert _mask("010-1234-5678") == "***5678"
+    assert _mask("ab") == "***"

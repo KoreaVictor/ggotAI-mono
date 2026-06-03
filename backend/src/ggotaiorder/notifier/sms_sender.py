@@ -56,6 +56,9 @@ async def send(
 
     template = settings.rpa_success_message if success else settings.rpa_fail_message
     text = render_template(template, channel, count)
+    if not text.strip():
+        logger.warning("빈 메시지 — 발송 스킵 shop_key=%s", shop_key)
+        return False
 
     try:
         await asyncio.to_thread(provider.send_message, recipient, text)

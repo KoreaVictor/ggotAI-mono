@@ -1,0 +1,42 @@
+"""알림 발송 제공사 추상화.
+
+NotificationProvider(Protocol)로 계약을 고정하고, 실제 발송은 제공사별 구현이 담당한다.
+HttpNotificationProvider 는 골격이며 실 발송에는 제공사 계정·승인 템플릿이 필요하다(라이브 체크리스트).
+"""
+
+from __future__ import annotations
+
+import logging
+import os
+from typing import Protocol
+
+import httpx
+
+logger = logging.getLogger(__name__)
+
+
+class NotificationProvider(Protocol):
+    """단일 메시지 발송 계약."""
+
+    def send_message(self, to: str, text: str) -> None: ...
+
+
+class HttpNotificationProvider:
+    """범용 HTTP 메시징 제공사 골격 (env 기반).
+
+    NOTIFY_API_URL/NOTIFY_API_KEY 로 설정. 실제 페이로드 규격은 제공사에 맞춰
+    완성해야 한다(라이브 체크리스트). 미설정 시 RuntimeError.
+    """
+
+    def send_message(self, to: str, text: str) -> None:
+        api_url = os.getenv("NOTIFY_API_URL")
+        api_key = os.getenv("NOTIFY_API_KEY")
+        if not api_url or not api_key:
+            raise RuntimeError("NOTIFY_API_URL/NOTIFY_API_KEY 미설정 — 발송 불가")
+        resp = httpx.post(
+            api_url,
+            headers={"Authorization": f"Bearer {api_key}"},
+            json={"to": to, "text": text},
+            timeout=10.0,
+        )
+        resp.raise_for_status()

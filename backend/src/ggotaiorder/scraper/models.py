@@ -1,0 +1,27 @@
+"""인트라넷 크롤러 데이터 모델."""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+
+from ggotaiorder.pipeline.models import OrderExtraction
+
+
+@dataclass
+class IntranetShop:
+    """인트라넷 설정이 있는 꽃집."""
+
+    shop_key: int
+    shop_name: str
+    url: str
+    username: str
+    enc_password: str  # AES 암호문(복호화 전)
+
+
+@dataclass
+class ScrapedOrder:
+    """스크래핑된 단일 주문."""
+
+    order_no: str               # 인트라넷 주문번호(중복 식별키)
+    raw_text: str               # 원문(stt_text 로 저장)
+    fields: OrderExtraction     # 11필드 (pipeline.models.OrderExtraction 재사용)

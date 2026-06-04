@@ -48,10 +48,10 @@
   - [x] `setting_info`에서 프론트가 암호화해 저장한 비밀번호를 파이썬 복호화 모듈을 통해 원래 값으로 복원하여 크롤러에 투입
   - [x] 수집된 원문 `stt_text` 필드 기록 및 AI 필터 패스 후 바로 `order_details` (`rpa_status='ready'`) 삽입 로직 구현
   - [x] 크롤링 3회 이상 실패 시 비상 알림 발송 연동 예외 처리
-- [ ] asyncio.Lock 기반 싱글턴 RPA 엔진 및 비상 대피 백업 기능 개발 (`rpa/singleton_macro.py`)
-  - [ ] 키보드/마우스 및 클립보드 기반 꽃집 업무 관리 프로그램 입력 매크로 구현
-  - [ ] 관리 프로그램 미구동 감지 시 로컬 폴더 엑셀(.xlsx) 파일 및 텍스트 영수증 생성 로직 구현
-  - [ ] 최종 RPA 성공/실패 여부에 따른 `rpa_status` 필드 업데이트 구현
+- [x] asyncio.Lock 기반 싱글턴 RPA 엔진 및 비상 대피 백업 기능 개발 (`rpa/singleton_macro.py`)
+  - [x] 키보드/마우스 및 클립보드 기반 꽃집 업무 관리 프로그램 입력 매크로 구현 *(싱글턴 락 오케스트레이션·구동감지 분기 완료. 실제 창 탐색·키 시퀀스는 `WindowsProgramAutomator` 골격 — README 라이브 체크리스트 참조)*
+  - [x] 관리 프로그램 미구동 감지 시 로컬 폴더 엑셀(.xlsx) 파일 및 텍스트 영수증 생성 로직 구현
+  - [x] 최종 RPA 성공/실패 여부에 따른 `rpa_status` 필드 업데이트 구현
 - [x] 알림톡/문자 발송기 구현 (`notifier/sms_sender.py`)
   - [x] `setting_info` 설정에 따라 템플릿 문자열의 `{channel}`, `{count}` 실시간 변수 치환 구현
   - [x] 카카오 알림톡/문자 API 연동 및 발송 성공 이력 기록

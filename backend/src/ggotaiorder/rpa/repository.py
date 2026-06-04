@@ -46,6 +46,8 @@ class SupabaseRpaRepository:
         if ch.data:
             channel = ch.data[0].get("channel_order") or ""
 
+        quantity = row.get("quantity")
+        price = row.get("price")
         return RpaOrder(
             order_detail_id=row["id"],
             shop_key=row["shop_key"],
@@ -54,8 +56,8 @@ class SupabaseRpaRepository:
             customer_name=row.get("customer_name") or "",
             customer_phone_number=row.get("customer_phone_number") or "",
             product_name=row.get("product_name") or "",
-            quantity=row.get("quantity") if row.get("quantity") is not None else 1,
-            price=row.get("price") if row.get("price") is not None else 0,
+            quantity=quantity if quantity is not None else 1,
+            price=price if price is not None else 0,
             delivery_at=row.get("delivery_at"),
             delivery_place=row.get("delivery_place"),
             receiver_name=row.get("receiver_name"),
@@ -66,10 +68,14 @@ class SupabaseRpaRepository:
         )
 
     def set_rpa_status(self, order_detail_id: int, status: str) -> None:
-        (
+        res = (
             get_client()
             .table("order_details")
             .update({"rpa_status": status})
             .eq("id", order_detail_id)
             .execute()
         )
+        if not res.data:
+            raise RuntimeError(
+                f"order_details UPDATE(rpa_status) 응답이 없습니다 — id={order_detail_id}"
+            )

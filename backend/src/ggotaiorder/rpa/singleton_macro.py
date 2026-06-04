@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from collections.abc import Awaitable, Callable
 
 from ggotaiorder.config import load_config
 from ggotaiorder.notifier.sms_sender import send as notifier_send
@@ -35,7 +36,7 @@ async def enqueue(
     repo: RpaRepository | None = None,
     automator: ProgramAutomator | None = None,
     backup: BackupWriter | None = None,
-    notify=None,
+    notify: Callable[[RpaOrder, bool], Awaitable[None]] | None = None,
 ) -> None:
     """order_details 1건을 전산 프로그램에 입력한다 (락 순차).
 

@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import pytest
 
 from ggotaiorder.config import Config, load_config, ConfigError
@@ -44,9 +46,6 @@ def test_aes_key_must_be_32_bytes():
     broken = dict(VALID, AES_ENCRYPTION_KEY="0123456789abcdef")  # valid hex, 8 bytes
     with pytest.raises(ConfigError):
         load_config(env=broken)
-
-
-from pathlib import Path
 
 
 def test_rpa_backup_dir_default():

@@ -40,3 +40,13 @@ def test_backup_creates_missing_dir(tmp_path):
     writer = BackupWriter(target)
     writer.write(_order())
     assert target.exists()
+
+
+def test_receipt_renders_none_fields_as_dash(tmp_path):
+    writer = BackupWriter(tmp_path / "backups")
+    _, txt_path = writer.write(
+        _order(delivery_place=None, ribbon_sender=None, card_message=None)
+    )
+    txt = txt_path.read_text(encoding="utf-8")
+    assert "None" not in txt          # None이 그대로 출력되면 안 됨
+    assert "배송지: -" in txt

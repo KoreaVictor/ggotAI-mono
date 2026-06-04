@@ -33,6 +33,11 @@ def _row(o: RpaOrder) -> list:
     ]
 
 
+def _v(value: object) -> str:
+    """영수증 표시용: None은 '-'로 렌더(사장님이 읽는 출력)."""
+    return "-" if value is None else str(value)
+
+
 def _receipt_text(o: RpaOrder) -> str:
     return "\n".join([
         "===== ggotAI 주문 영수증 (수동 입력 백업) =====",
@@ -40,13 +45,13 @@ def _receipt_text(o: RpaOrder) -> str:
         f"꽃집: {o.shop_name} (key={o.shop_key})",
         f"채널: {o.channel}",
         f"상품: {o.product_name} x {o.quantity} ({o.price}원)",
-        f"배송일시: {o.delivery_at}",
-        f"배송지: {o.delivery_place}",
-        f"받는분: {o.receiver_name} / {o.receiver_phone_number}",
+        f"배송일시: {_v(o.delivery_at)}",
+        f"배송지: {_v(o.delivery_place)}",
+        f"받는분: {_v(o.receiver_name)} / {_v(o.receiver_phone_number)}",
         f"고객: {o.customer_name} / {o.customer_phone_number}",
-        f"리본(보내는분): {o.ribbon_sender}",
-        f"리본(경조사): {o.ribbon_congratulations}",
-        f"카드메시지: {o.card_message}",
+        f"리본(보내는분): {_v(o.ribbon_sender)}",
+        f"리본(경조사): {_v(o.ribbon_congratulations)}",
+        f"카드메시지: {_v(o.card_message)}",
         "==========================================",
     ])
 
@@ -59,7 +64,7 @@ class BackupWriter:
 
     def write(self, order: RpaOrder) -> tuple[Path, Path]:
         self._dir.mkdir(parents=True, exist_ok=True)
-        stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+        stamp = datetime.now().strftime("%Y%m%d-%H%M%S-%f")
         base = f"{order.shop_key}_{order.order_detail_id}_{stamp}"
         xlsx_path = self._dir / f"{base}.xlsx"
         txt_path = self._dir / f"{base}.txt"

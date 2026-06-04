@@ -1,0 +1,37 @@
+# 환경변수 파일 (절대 커밋 금지)
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.venv/
+venv/
+env/
+*.egg-info/
+dist/
+build/
+
+# Node / Vite / Electron
+node_modules/
+frontend/dist/
+frontend/dist-electron/
+frontend/release/
+*.tsbuildinfo
+
+# 빌드 산출물
+*.exe
+*.msi
+*.dmg
+
+# 로그
+*.log
+logs/
+
+# 에디터
+.vscode/
+.idea/
+*.swp

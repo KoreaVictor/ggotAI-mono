@@ -161,7 +161,6 @@ async def test_full_live_e2e(monkeypatch, tmp_path):
 
     from ggotaiorder.core.supabase_client import get_client
     from ggotaiorder.pipeline.repository import SupabaseOrderRepository
-    from ggotaiorder.rpa.backup import BackupWriter
     from ggotaiorder.rpa.repository import SupabaseRpaRepository
 
     shop_key = int(os.environ["E2E_TEST_SHOP_KEY"])
@@ -178,8 +177,6 @@ async def test_full_live_e2e(monkeypatch, tmp_path):
         "stt_text": "장미 2송이 내일 오전 10시 강남구청 배송, 받는분 이영희 010-1111-2222",
         "is_order": "N",
     }
-    ins = client.table("server_call_history").insert(rec).execute()
-    call_history_id = ins.data[0]["id"]
 
     notify_calls = []
 
@@ -194,7 +191,12 @@ async def test_full_live_e2e(monkeypatch, tmp_path):
 
     monkeypatch.setattr(engine, "enqueue", wired_enqueue)
 
+    call_history_id = None
     try:
+        ins = client.table("server_call_history").insert(rec).execute()
+        assert ins.data, f"server_call_history insert 실패: {ins}"
+        call_history_id = ins.data[0]["id"]
+
         # 2) 실 Gemini 추출 + 실 Supabase INSERT(process)
         await engine.process(call_history_id, repo=SupabaseOrderRepository())
 
@@ -209,6 +211,9 @@ async def test_full_live_e2e(monkeypatch, tmp_path):
         assert od.data[0]["rpa_status"] == "fail"  # 미구동→백업
         assert list(tmp_path.glob("*.xlsx"))
         assert len(notify_calls) == 1
+        assert notify_calls[0][1] is False
     finally:
         # 4) 정리: call_history 삭제 → FK CASCADE 로 order_details 동반 삭제
-        client.table("server_call_history").delete().eq("id", call_history_id).execute()
+        if call_history_id is not None:
+            del_res = client.table("server_call_history").delete().eq("id", call_history_id).execute()
+            assert del_res.data, f"cleanup DELETE 실패 — 행 누수 가능 id={call_history_id}"

@@ -11,7 +11,7 @@ import asyncio
 import logging
 
 from ggotaiorder.pipeline.extractor import extract_order
-from ggotaiorder.pipeline.models import CallHistory, OrderExtraction
+from ggotaiorder.pipeline.models import DELIVERY_AT_UNKNOWN, CallHistory, OrderExtraction
 from ggotaiorder.pipeline.repository import OrderRepository, SupabaseOrderRepository
 from ggotaiorder.pipeline.stt import transcribe
 from ggotaiorder.rpa.singleton_macro import enqueue
@@ -38,7 +38,11 @@ def count_missing(extraction: OrderExtraction) -> int:
 
 
 def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
-    """추출 결과 + 수집 이력으로 order_details INSERT payload 를 만든다."""
+    """추출 결과 + 수집 이력으로 order_details INSERT payload 를 만든다.
+
+    order_details 의 NOT NULL·DEFAULT 없는 컬럼은 미상 시 안전 기본값으로 채운다
+    (설계서 §6: product_name/delivery_at/delivery_place/receiver_* NN 위반 방지).
+    """
     return {
         "call_history_id": row.id,
         "shop_key": row.shop_key,
@@ -47,13 +51,13 @@ def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
         "customer_phone_number": (
             extraction.customer_phone_number or row.customer_phone_number or ""
         ),
-        "product_name": extraction.product_name,
+        "product_name": extraction.product_name or "미정",
         "quantity": extraction.quantity if extraction.quantity is not None else 1,
         "price": extraction.price if extraction.price is not None else 0,
-        "delivery_at": extraction.delivery_at,
-        "delivery_place": extraction.delivery_place,
-        "receiver_name": extraction.receiver_name,
-        "receiver_phone_number": extraction.receiver_phone_number,
+        "delivery_at": extraction.delivery_at or DELIVERY_AT_UNKNOWN,
+        "delivery_place": extraction.delivery_place or "미정",
+        "receiver_name": extraction.receiver_name or "미정",
+        "receiver_phone_number": extraction.receiver_phone_number or "",
         "ribbon_congratulations": extraction.ribbon_congratulations,
         "card_message": extraction.card_message,
         "rpa_status": "ready",

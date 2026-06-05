@@ -37,7 +37,7 @@ def parse_schema(path: Path | str) -> dict[str, dict[str, ColumnSpec]]:
             name = line.split()[0]
             if not _IDENT_RE.match(name):
                 continue
-            nullable = "NOT NULL" not in upper
+            nullable = "NOT NULL" not in upper and "PRIMARY KEY" not in upper
             has_default = "DEFAULT" in upper or "SERIAL" in upper
             cols[name] = ColumnSpec(name=name, nullable=nullable, has_default=has_default)
         tables[table] = cols

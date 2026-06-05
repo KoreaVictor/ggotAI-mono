@@ -19,6 +19,7 @@ def test_order_details_columns_and_nullability():
     assert cols["product_name"].has_default is False
     # id 는 SERIAL → has_default True
     assert cols["id"].has_default is True
+    assert cols["id"].nullable is False
     # ribbon_sender 는 NULL 허용
     assert cols["ribbon_sender"].nullable is True
 

@@ -75,3 +75,46 @@ def test_crawler_call_record_conforms():
 def test_crawler_order_payload_conforms():
     order = ScrapedOrder(order_no="A1", raw_text="원문", fields=OrderExtraction())
     _assert_conforms(_order_payload(_shop(), order, 1), "order_details")
+
+
+import re
+
+from tests.support.schema_contract import all_columns
+
+_SRC = Path(__file__).resolve().parents[1] / "src" / "ggotaiorder"
+_REPO_FILES = [
+    _SRC / "scraper" / "repository.py",
+    _SRC / "rpa" / "repository.py",
+    _SRC / "api" / "repository.py",
+    _SRC / "pipeline" / "repository.py",
+    _SRC / "notifier" / "repository.py",
+]
+
+_EQ_RE = re.compile(r"\.(?:eq|neq|gt|gte|lt|lte|is_)\(\s*\"([^\"]+)\"")
+_SELECT_RE = re.compile(r"\.select\(\s*\"([^\"]+)\"")
+_UPDATE_RE = re.compile(r"\.update\(\s*\{([^}]*)\}")
+_UPDATE_KEY_RE = re.compile(r"\"(\w+)\"\s*:")
+
+
+def _referenced_columns(text: str) -> set[str]:
+    cols: set[str] = set()
+    cols.update(_EQ_RE.findall(text))
+    for sel in _SELECT_RE.findall(text):
+        for tok in sel.split(","):
+            tok = tok.strip()
+            if not tok or tok == "*" or "(" in tok:  # 임베드/와일드카드 스킵
+                continue
+            cols.add(tok)
+    for blk in _UPDATE_RE.findall(text):
+        cols.update(_UPDATE_KEY_RE.findall(blk))
+    return cols
+
+
+def test_repository_column_references_exist_in_schema():
+    known = all_columns(TABLES)
+    for path in _REPO_FILES:
+        if not path.exists():
+            continue
+        refs = _referenced_columns(path.read_text(encoding="utf-8"))
+        unknown = refs - known
+        assert not unknown, f"{path.name}: 계약에 없는 컬럼 참조 {unknown}"

@@ -1,12 +1,20 @@
 """T1 스키마 정합성: 백엔드 INSERT 페이로드가 계약을 준수하는지 검증."""
 
+import os
+import re
 from pathlib import Path
+
+import pytest
 
 from ggotaiorder.pipeline.engine import _build_order_payload
 from ggotaiorder.pipeline.models import CallHistory, OrderExtraction
 from ggotaiorder.scraper.crawler import _call_record, _order_payload
 from ggotaiorder.scraper.models import IntranetShop, ScrapedOrder
-from tests.support.schema_contract import parse_schema, required_columns
+from tests.support.schema_contract import (
+    all_columns,
+    parse_schema,
+    required_columns,
+)
 
 SCHEMA = Path(__file__).resolve().parents[2] / "docs" / "database_schema.sql"
 TABLES = parse_schema(SCHEMA)
@@ -77,18 +85,8 @@ def test_crawler_order_payload_conforms():
     _assert_conforms(_order_payload(_shop(), order, 1), "order_details")
 
 
-import re
-
-from tests.support.schema_contract import all_columns
-
 _SRC = Path(__file__).resolve().parents[1] / "src" / "ggotaiorder"
-_REPO_FILES = [
-    _SRC / "scraper" / "repository.py",
-    _SRC / "rpa" / "repository.py",
-    _SRC / "api" / "repository.py",
-    _SRC / "pipeline" / "repository.py",
-    _SRC / "notifier" / "repository.py",
-]
+_REPO_FILES = sorted(_SRC.rglob("repository.py"))
 
 _EQ_RE = re.compile(r"\.(?:eq|neq|gt|gte|lt|lte|is_)\(\s*\"([^\"]+)\"")
 _SELECT_RE = re.compile(r"\.select\(\s*\"([^\"]+)\"")
@@ -118,11 +116,6 @@ def test_repository_column_references_exist_in_schema():
         refs = _referenced_columns(path.read_text(encoding="utf-8"))
         unknown = refs - known
         assert not unknown, f"{path.name}: 계약에 없는 컬럼 참조 {unknown}"
-
-
-import os
-
-import pytest
 
 
 @pytest.mark.skipif(

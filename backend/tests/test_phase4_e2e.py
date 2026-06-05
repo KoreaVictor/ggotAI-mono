@@ -1,6 +1,9 @@
 """T3 E2E: 업로드→인입→파이프라인→싱글턴 RPA→백업→알림 배선 검증."""
 
+import os
 from pathlib import Path
+
+import pytest
 
 from fastapi.testclient import TestClient
 
@@ -146,3 +149,66 @@ async def test_assembled_e2e_upload_to_backup_and_notify(monkeypatch, tmp_path):
     backups = list(tmp_path.glob("*.xlsx"))
     assert len(backups) == 1
     assert list(tmp_path.glob("*.txt"))
+
+
+@pytest.mark.skipif(
+    os.getenv("RUN_LIVE_E2E") != "1" or not os.getenv("E2E_TEST_SHOP_KEY"),
+    reason="풀 라이브 E2E 는 RUN_LIVE_E2E=1 + E2E_TEST_SHOP_KEY 필요",
+)
+async def test_full_live_e2e(monkeypatch, tmp_path):
+    """실 Gemini + 실 Supabase. automator 미구동→백업, notify 는 spy."""
+    from datetime import datetime
+
+    from ggotaiorder.core.supabase_client import get_client
+    from ggotaiorder.pipeline.repository import SupabaseOrderRepository
+    from ggotaiorder.rpa.backup import BackupWriter
+    from ggotaiorder.rpa.repository import SupabaseRpaRepository
+
+    shop_key = int(os.environ["E2E_TEST_SHOP_KEY"])
+    client = get_client()
+
+    # 1) 테스트용 call_history 행 생성(가게전화, stt_text 주입 → STT 우회)
+    now = datetime.now()
+    rec = {
+        "channel_order": "가게전화", "channel_classification": "E2E-TEST",
+        "customer_phone_number": "010-0000-0000", "shop_key": shop_key,
+        "shop_name": "E2E꽃집", "call_date": now.strftime("%Y-%m-%d"),
+        "call_time": now.strftime("%H:%M:%S"), "duration_seconds": 0,
+        "audio_file_name": None,
+        "stt_text": "장미 2송이 내일 오전 10시 강남구청 배송, 받는분 이영희 010-1111-2222",
+        "is_order": "N",
+    }
+    ins = client.table("server_call_history").insert(rec).execute()
+    call_history_id = ins.data[0]["id"]
+
+    notify_calls = []
+
+    async def spy_notify(order, success):
+        notify_calls.append((order.order_detail_id, success))
+
+    async def wired_enqueue(order_id):
+        await singleton_macro.enqueue(
+            order_id, repo=SupabaseRpaRepository(), automator=NotRunningAutomator(),
+            backup=BackupWriter(tmp_path), notify=spy_notify,
+        )
+
+    monkeypatch.setattr(engine, "enqueue", wired_enqueue)
+
+    try:
+        # 2) 실 Gemini 추출 + 실 Supabase INSERT(process)
+        await engine.process(call_history_id, repo=SupabaseOrderRepository())
+
+        # 3) 검증: order_details 생성 + rpa_status 마킹 + 백업 + notify
+        od = (
+            client.table("order_details")
+            .select("id, rpa_status, product_name")
+            .eq("call_history_id", call_history_id)
+            .execute()
+        )
+        assert od.data, "order_details 가 생성되지 않음"
+        assert od.data[0]["rpa_status"] == "fail"  # 미구동→백업
+        assert list(tmp_path.glob("*.xlsx"))
+        assert len(notify_calls) == 1
+    finally:
+        # 4) 정리: call_history 삭제 → FK CASCADE 로 order_details 동반 삭제
+        client.table("server_call_history").delete().eq("id", call_history_id).execute()

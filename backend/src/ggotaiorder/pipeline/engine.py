@@ -68,7 +68,7 @@ async def process(call_history_id: int, repo: OrderRepository | None = None) -> 
     repo = repo or SupabaseOrderRepository()
 
     try:
-        row = repo.get_call_history(call_history_id)
+        row = await asyncio.to_thread(repo.get_call_history, call_history_id)
     except Exception:
         logger.exception("수집 이력 조회 실패 id=%s", call_history_id)
         return
@@ -78,7 +78,7 @@ async def process(call_history_id: int, repo: OrderRepository | None = None) -> 
         if row.audio_file_name and row.audio_file_name != INTRANET_AUDIO_MARKER:
             try:
                 stt_text = await asyncio.to_thread(transcribe, row.audio_file_name)
-                repo.update_stt_text(call_history_id, stt_text)
+                await asyncio.to_thread(repo.update_stt_text, call_history_id, stt_text)
             except Exception:
                 logger.exception("STT 처리 실패 — 건너뜀 id=%s", call_history_id)
                 return
@@ -87,19 +87,30 @@ async def process(call_history_id: int, repo: OrderRepository | None = None) -> 
             return
 
     try:
-        extraction = extract_order(stt_text)
+        # 동기 Gemini 호출(재시도 time.sleep 포함)을 워커 스레드로 오프로드해
+        # asyncio 이벤트 루프를 블로킹하지 않는다.
+        extraction = await asyncio.to_thread(extract_order, stt_text)
     except Exception:
         logger.exception("Gemini 추출 실패 id=%s", call_history_id)
         return
 
     missing = count_missing(extraction)
     if missing >= _MISSING_THRESHOLD:
-        repo.set_is_order(call_history_id, "N")
-        repo.delete_audio(row.audio_file_name)
+        await asyncio.to_thread(repo.set_is_order, call_history_id, "N")
+        await asyncio.to_thread(repo.delete_audio, row.audio_file_name)
         logger.info("주문 아님 판별 id=%s (누락 %s개)", call_history_id, missing)
         return
 
-    repo.set_is_order(call_history_id, "Y")
-    order_id = repo.insert_order_details(_build_order_payload(row, extraction))
+    # order_details INSERT가 성공한 뒤에만 is_order='Y'로 마킹한다.
+    # 순서를 뒤집으면 INSERT 실패 시 주문 행 없이 is_order만 'Y'가 되는 부분쓰기가 남는다.
+    try:
+        order_id = await asyncio.to_thread(
+            repo.insert_order_details, _build_order_payload(row, extraction)
+        )
+    except Exception:
+        logger.exception("order_details 생성 실패 — is_order 미변경 id=%s", call_history_id)
+        return
+
+    await asyncio.to_thread(repo.set_is_order, call_history_id, "Y")
     logger.info("order_details 생성 id=%s order_id=%s", call_history_id, order_id)
     await enqueue(order_id)

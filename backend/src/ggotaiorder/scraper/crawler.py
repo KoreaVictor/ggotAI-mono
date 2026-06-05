@@ -16,7 +16,7 @@ from ggotaiorder.config import load_config
 from ggotaiorder.core.crypto import decrypt
 from ggotaiorder.notifier.sms_sender import send as notifier_send
 from ggotaiorder.rpa.singleton_macro import enqueue
-from ggotaiorder.scraper.models import IntranetShop, ScrapedOrder
+from ggotaiorder.scraper.models import INTRANET_CHANNEL, IntranetShop, ScrapedOrder
 from ggotaiorder.scraper.repository import IntranetRepository, SupabaseIntranetRepository
 from ggotaiorder.scraper.scraper_client import IntranetScraper, PlaywrightIntranetScraper
 
@@ -33,13 +33,13 @@ _failure_counts: dict[int, int] = {}
 
 async def _default_notify(shop_key: int) -> None:
     """기본 비상 알림: notifier 실패 템플릿으로 발송."""
-    await notifier_send(shop_key, channel="인터라넷", count=0, success=False)
+    await notifier_send(shop_key, channel=INTRANET_CHANNEL, count=0, success=False)
 
 
 def _call_record(shop: IntranetShop, order: ScrapedOrder) -> dict:
     now = datetime.now()
     return {
-        "channel_order": "인터라넷",
+        "channel_order": INTRANET_CHANNEL,
         "channel_classification": order.order_no,
         "shop_key": shop.shop_key,
         "shop_name": shop.shop_name,

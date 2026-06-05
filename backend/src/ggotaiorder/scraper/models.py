@@ -6,6 +6,10 @@ from dataclasses import dataclass
 
 from ggotaiorder.pipeline.models import OrderExtraction
 
+# server_call_history.channel_order 에 기록되는 인트라넷 채널 식별자.
+# crawler(적재)와 repository(중복검증)가 동일 값을 써야 하므로 단일 상수로 공유한다.
+INTRANET_CHANNEL = "인터라넷"
+
 
 @dataclass
 class IntranetShop:

@@ -72,6 +72,47 @@ async def test_order_path_inserts_and_enqueues(monkeypatch):
     assert insert_payload["rpa_status"] == "ready"
 
 
+async def test_insert_failure_does_not_mark_is_order_Y(monkeypatch):
+    """INSERT가 실패하면 set_is_order('Y') 부분쓰기가 남지 않아야 한다."""
+    repo = FakeRepo(_row())
+
+    def boom(payload):
+        repo.calls.append(("insert", payload))
+        raise RuntimeError("insert fail")
+
+    repo.insert_order_details = boom  # type: ignore[method-assign]
+    monkeypatch.setattr(engine, "extract_order", lambda text: _full_extraction())
+
+    enqueued: list[int] = []
+
+    async def fake_enqueue(order_id: int) -> None:
+        enqueued.append(order_id)
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    # 주문 행 생성 실패 시 is_order='Y' 마킹과 enqueue 모두 일어나지 않아야 한다.
+    assert ("set_is_order", 1, "Y") not in repo.calls
+    assert enqueued == []
+
+
+async def test_order_path_marks_Y_after_successful_insert(monkeypatch):
+    """정상 경로에서 set_is_order('Y')는 INSERT 성공 이후에 호출돼야 한다."""
+    repo = FakeRepo(_row())
+    monkeypatch.setattr(engine, "extract_order", lambda text: _full_extraction())
+
+    async def fake_enqueue(order_id: int) -> None:
+        pass
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    kinds = [c[0] for c in repo.calls]
+    assert kinds.index("insert") < kinds.index("set_is_order")
+
+
 async def test_non_order_path_sets_N_and_no_insert(monkeypatch):
     repo = FakeRepo(_row(audio_file_name="call_001.wav"))
     monkeypatch.setattr(engine, "extract_order", lambda text: OrderExtraction())

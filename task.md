@@ -59,6 +59,6 @@
 ---
 
 ## 🔗 Phase 4: 통합 및 최종 검증 (공동 수행)
-- [ ] 프론트엔드(`ggotAIya` React/Electron)와 백엔드(`ggotAIorder` Windows Service) 간의 Supabase DB 스키마 정합성 교차 테스트
-- [ ] React UI의 [수집 중지] 버튼 클릭 -> Electron IPC -> 백엔드 윈도우 서비스가 정상 정지되고 트레이 아이콘이 🔴로 바뀌는지 OS 수준의 연동 수동 검증
-- [ ] 모의 음성 파일 Webhook 전송 -> STT 변환 -> Gemini 분석 -> order_details 생성 -> 싱글턴 RPA 실행 -> 카카오 알림톡 발송의 E2E 시나리오 완성도 통합 검증
+- [x] 프론트엔드(`ggotAIya` React/Electron)와 백엔드(`ggotAIorder` Windows Service) 간의 Supabase DB 스키마 정합성 교차 테스트 *(자동화: `tests/test_phase4_schema.py`(페이로드 적합성·참조 스캔·라이브 드리프트 opt-in) + `test_phase4_frontend_schema.py`. 기준=`docs/database_schema.sql`)*
+- [x] React UI의 [수집 중지] 버튼 클릭 -> Electron IPC -> 백엔드 윈도우 서비스가 정상 정지되고 트레이 아이콘이 🔴로 바뀌는지 OS 수준의 연동 수동 검증 *(수동 체크리스트: `docs/phase4_manual_verification.md`)*
+- [x] 모의 음성 파일 Webhook 전송 -> STT 변환 -> Gemini 분석 -> order_details 생성 -> 싱글턴 RPA 실행 -> 카카오 알림톡 발송의 E2E 시나리오 완성도 통합 검증 *(자동화: `tests/test_phase4_e2e.py` 조립 E2E(항상) + 풀 라이브 E2E(opt-in). STT 우회·notify spy)*

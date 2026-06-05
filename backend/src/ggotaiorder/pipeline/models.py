@@ -7,6 +7,9 @@ from typing import Optional
 
 from pydantic import BaseModel, Field
 
+# 배송일시 미상 시 NOT NULL(timestamptz) 충족용 센티넬(=보정 필요). 설계서 §6.
+DELIVERY_AT_UNKNOWN = "2099-12-31T23:59:59+09:00"
+
 
 class OrderExtraction(BaseModel):
     """Gemini가 stt_text에서 추출하는 11개 표준 주문 필드(누락은 None)."""

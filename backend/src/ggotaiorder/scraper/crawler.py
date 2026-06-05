@@ -17,6 +17,7 @@ from ggotaiorder.core.crypto import decrypt
 from ggotaiorder.notifier.sms_sender import send as notifier_send
 from ggotaiorder.rpa.singleton_macro import enqueue
 from ggotaiorder.scraper.models import INTRANET_CHANNEL, IntranetShop, ScrapedOrder
+from ggotaiorder.pipeline.models import DELIVERY_AT_UNKNOWN
 from ggotaiorder.scraper.repository import IntranetRepository, SupabaseIntranetRepository
 from ggotaiorder.scraper.scraper_client import IntranetScraper, PlaywrightIntranetScraper
 
@@ -62,13 +63,13 @@ def _order_payload(shop: IntranetShop, order: ScrapedOrder, call_history_id: int
         "shop_name": shop.shop_name,
         "customer_name": f.customer_name or "신규",
         "customer_phone_number": f.customer_phone_number or "",
-        "product_name": f.product_name,
+        "product_name": f.product_name or "미정",
         "quantity": f.quantity if f.quantity is not None else 1,
         "price": f.price if f.price is not None else 0,
-        "delivery_at": f.delivery_at,
-        "delivery_place": f.delivery_place,
-        "receiver_name": f.receiver_name,
-        "receiver_phone_number": f.receiver_phone_number,
+        "delivery_at": f.delivery_at or DELIVERY_AT_UNKNOWN,
+        "delivery_place": f.delivery_place or "미정",
+        "receiver_name": f.receiver_name or "미정",
+        "receiver_phone_number": f.receiver_phone_number or "",
         "ribbon_congratulations": f.ribbon_congratulations,
         "card_message": f.card_message,
         "rpa_status": "ready",

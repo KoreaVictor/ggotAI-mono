@@ -118,3 +118,23 @@ def test_repository_column_references_exist_in_schema():
         refs = _referenced_columns(path.read_text(encoding="utf-8"))
         unknown = refs - known
         assert not unknown, f"{path.name}: 계약에 없는 컬럼 참조 {unknown}"
+
+
+import os
+
+import pytest
+
+
+@pytest.mark.skipif(
+    os.getenv("RUN_LIVE_SCHEMA") != "1",
+    reason="라이브 스키마 드리프트 검사는 RUN_LIVE_SCHEMA=1 opt-in",
+)
+def test_live_schema_has_all_contract_columns():
+    """실 Supabase 각 테이블이 schema.sql 의 모든 컬럼을 갖는지(코드/계약 ⊆ DB)."""
+    from ggotaiorder.core.supabase_client import get_client
+
+    client = get_client()
+    for table, cols in TABLES.items():
+        select = ",".join(cols)
+        # 누락 컬럼이 있으면 PostgREST 가 42703 에러를 던진다 → 테스트 실패.
+        client.table(table).select(select).limit(1).execute()

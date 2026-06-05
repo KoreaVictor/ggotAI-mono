@@ -6,7 +6,7 @@ import logging
 from typing import Protocol
 
 from ggotaiorder.core.supabase_client import get_client
-from ggotaiorder.scraper.models import IntranetShop
+from ggotaiorder.scraper.models import INTRANET_CHANNEL, IntranetShop
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class SupabaseIntranetRepository:
             .table("server_call_history")
             .select("id")
             .eq("shop_key", shop_key)
-            .eq("channel_order", "인터라넷")
+            .eq("channel_order", INTRANET_CHANNEL)
             .eq("channel_classification", order_no)
             .limit(1)
             .execute()

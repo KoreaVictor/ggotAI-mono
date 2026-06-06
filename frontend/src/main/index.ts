@@ -1,5 +1,6 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, safeStorage } from 'electron';
 import * as path from 'path';
+import * as fs from 'fs';
 import { exec } from 'child_process';
 
 let mainWindow: BrowserWindow | null = null;
@@ -144,4 +145,47 @@ ipcMain.handle('service:status', async () => {
       }
     });
   });
+});
+
+// ==========================================
+// IPC 통신 채널 등록 (remember_token 보안 저장)
+// ==========================================
+
+function tokenFilePath(): string {
+  return path.join(app.getPath('userData'), 'remember.bin');
+}
+
+// 자동로그인 토큰 저장 (OS 암호화)
+ipcMain.handle('auth:save', async (_e, payload: { userId: number; token: string }) => {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return { success: false, error: 'NO_ENCRYPTION' };
+    const enc = safeStorage.encryptString(JSON.stringify(payload));
+    fs.writeFileSync(tokenFilePath(), enc);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
+});
+
+// 자동로그인 토큰 로드
+ipcMain.handle('auth:load', async () => {
+  try {
+    const p = tokenFilePath();
+    if (!fs.existsSync(p) || !safeStorage.isEncryptionAvailable()) return null;
+    const dec = safeStorage.decryptString(fs.readFileSync(p));
+    return JSON.parse(dec) as { userId: number; token: string };
+  } catch {
+    return null;
+  }
+});
+
+// 자동로그인 토큰 삭제
+ipcMain.handle('auth:clear', async () => {
+  try {
+    const p = tokenFilePath();
+    if (fs.existsSync(p)) fs.unlinkSync(p);
+    return { success: true };
+  } catch (err) {
+    return { success: false, error: (err as Error).message };
+  }
 });

@@ -1,8 +1,7 @@
 import { CircleDot } from 'lucide-react';
 import type { Session } from '../session/authenticate';
 import type { ServiceStatus } from '../types/electron';
-
-type Route = 'home' | 'login' | 'signup' | 'findId' | 'findPw' | 'dashboard' | 'orders' | 'settings' | 'mypage';
+import type { Route } from './routes';
 
 interface Props {
   session: Session | null;

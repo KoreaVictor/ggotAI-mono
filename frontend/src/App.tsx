@@ -8,8 +8,7 @@ import { DashboardView } from './views/dashboard';
 import { OrderListView } from './views/order_list';
 import { SettingsView } from './views/settings';
 import type { ServiceStatus } from './types/electron';
-
-type Route = 'home' | 'login' | 'signup' | 'findId' | 'findPw' | 'dashboard' | 'orders' | 'settings' | 'mypage';
+import type { Route } from './shell/routes';
 
 function Shell() {
   const { session, logout } = useSession();
@@ -36,8 +35,6 @@ function Shell() {
     setRoute(session ? 'dashboard' : 'home');
   }, [session]);
 
-  const handleLogout = () => { logout(); };
-
   return (
     <div className="flex flex-col h-screen bg-brand-bg text-brand-text-primary overflow-hidden font-sans">
       <TopHeader
@@ -45,7 +42,7 @@ function Shell() {
         route={route}
         serviceStatus={serviceStatus}
         onNavigate={setRoute}
-        onLogout={handleLogout}
+        onLogout={logout}
       />
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
         {!session && route === 'home' && <HomeView onLogin={() => setRoute('login')} onSignup={() => setRoute('signup')} />}

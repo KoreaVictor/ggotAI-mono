@@ -15,10 +15,10 @@ export function LoginView({ onFindId, onFindPw }: { onFindId: () => void; onFind
     e.preventDefault();
     const form = (e.target as HTMLElement).closest('form');
     if (!form) return;
-    const fields = Array.from(form.querySelectorAll('input'));
+    const fields = Array.from(form.querySelectorAll<HTMLInputElement>('input:not([type=checkbox])'));
     const i = fields.indexOf(e.target as HTMLInputElement);
     if (i >= 0 && i < fields.length - 1) fields[i + 1].focus();
-    else (form.querySelector('button[type=submit]') as HTMLButtonElement | null)?.focus();
+    else (form.querySelector('button[type="submit"]') as HTMLButtonElement | null)?.focus();
   };
 
   const submit = async (e: React.FormEvent) => {

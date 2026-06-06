@@ -25,7 +25,7 @@ export function LoginView({ onFindId, onFindPw }: { onFindId: () => void; onFind
     e.preventDefault();
     setError('');
     setBusy(true);
-    const r = await login(username.trim(), password);
+    const r = await login(username.trim(), password, autoLogin);
     setBusy(false);
     if (!r.ok) setError(r.error ?? '로그인에 실패했습니다');
   };

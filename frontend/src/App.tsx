@@ -3,7 +3,8 @@ import { SessionProvider, useSession } from './session/SessionContext';
 import { TopHeader } from './shell/TopHeader';
 import { HomeView } from './views/home';
 import { LoginView } from './views/login';
-import { SignupView, FindIdView, FindPwView, MyPageView } from './views/_placeholders';
+import { FindIdView, FindPwView, MyPageView } from './views/_placeholders';
+import { SignupView } from './views/signup';
 import { DashboardView } from './views/dashboard';
 import { OrderListView } from './views/order_list';
 import { SettingsView } from './views/settings';
@@ -11,7 +12,7 @@ import type { ServiceStatus } from './types/electron';
 import type { Route } from './shell/routes';
 
 function Shell() {
-  const { session, logout } = useSession();
+  const { session, authReady, logout } = useSession();
   const [route, setRoute] = useState<Route>('home');
   const [serviceStatus, setServiceStatus] = useState<ServiceStatus | 'LOADING'>('LOADING');
 
@@ -45,16 +46,19 @@ function Shell() {
         onLogout={logout}
       />
       <main className="flex-1 flex flex-col min-w-0 overflow-hidden">
-        {!session && route === 'home' && <HomeView onLogin={() => setRoute('login')} onSignup={() => setRoute('signup')} />}
-        {!session && route === 'login' && <LoginView onFindId={() => setRoute('findId')} onFindPw={() => setRoute('findPw')} />}
-        {!session && route === 'signup' && <SignupView />}
-        {!session && route === 'findId' && <FindIdView />}
-        {!session && route === 'findPw' && <FindPwView />}
+        {!authReady && (
+          <div className="flex-1 flex items-center justify-center text-brand-text-muted text-sm">불러오는 중…</div>
+        )}
+        {authReady && !session && route === 'home' && <HomeView onLogin={() => setRoute('login')} onSignup={() => setRoute('signup')} />}
+        {authReady && !session && route === 'login' && <LoginView onFindId={() => setRoute('findId')} onFindPw={() => setRoute('findPw')} />}
+        {authReady && !session && route === 'signup' && <SignupView onDone={() => setRoute('login')} />}
+        {authReady && !session && route === 'findId' && <FindIdView />}
+        {authReady && !session && route === 'findPw' && <FindPwView />}
 
-        {session && route === 'dashboard' && <DashboardView />}
-        {session && route === 'orders' && <OrderListView />}
-        {session && route === 'settings' && <SettingsView />}
-        {session && route === 'mypage' && <MyPageView />}
+        {authReady && session && route === 'dashboard' && <DashboardView />}
+        {authReady && session && route === 'orders' && <OrderListView />}
+        {authReady && session && route === 'settings' && <SettingsView />}
+        {authReady && session && route === 'mypage' && <MyPageView />}
       </main>
     </div>
   );

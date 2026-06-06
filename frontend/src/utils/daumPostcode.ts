@@ -15,15 +15,23 @@ declare global {
   }
 }
 
+let loadPromise: Promise<void> | null = null;
+
 function loadScript(): Promise<void> {
-  return new Promise((resolve, reject) => {
-    if (window.daum?.Postcode) return resolve();
+  if (window.daum?.Postcode) return Promise.resolve();
+  if (loadPromise) return loadPromise;
+  loadPromise = new Promise<void>((resolve, reject) => {
     const s = document.createElement('script');
     s.src = SCRIPT_SRC;
     s.onload = () => resolve();
-    s.onerror = () => reject(new Error('주소찾기 스크립트 로드 실패'));
+    s.onerror = () => {
+      loadPromise = null; // 실패 시 캐시 초기화 → 재시도 가능
+      s.remove();
+      reject(new Error('주소찾기 스크립트 로드 실패'));
+    };
     document.head.appendChild(s);
   });
+  return loadPromise;
 }
 
 /** 우편번호 검색 팝업을 열고 선택된 주소를 반환한다. */

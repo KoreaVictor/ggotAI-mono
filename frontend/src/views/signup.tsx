@@ -74,7 +74,7 @@ export function SignupView({ onDone }: { onDone: () => void }) {
         <div className="font-display font-bold text-lg text-brand-text-primary mb-2">회원가입</div>
 
         <div className="flex gap-2">
-          <input value={f.username} onChange={set('username')} onKeyDown={focusNext} placeholder="아이디" autoFocus className={INPUT} />
+          <input value={f.username} onChange={(e) => { set('username')(e); setDupMsg(''); }} onKeyDown={focusNext} placeholder="아이디" autoFocus className={INPUT} />
           <button type="button" onClick={checkUsername} className="shrink-0 px-3 rounded-lg border border-brand-border text-xs text-brand-text-secondary hover:bg-brand-card-hover">중복확인</button>
         </div>
         {dupMsg && <div className="text-xs text-brand-text-muted">{dupMsg}</div>}

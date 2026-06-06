@@ -5,7 +5,7 @@ export function LoginView({ onFindId, onFindPw }: { onFindId: () => void; onFind
   const { login } = useSession();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [autoLogin, setAutoLogin] = useState(false); // 표시만(영구화는 B)
+  const [autoLogin, setAutoLogin] = useState(false); // 자동로그인(영구 remember_token 발급)
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 

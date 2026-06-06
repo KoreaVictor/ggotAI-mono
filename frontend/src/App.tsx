@@ -3,7 +3,9 @@ import { SessionProvider, useSession } from './session/SessionContext';
 import { TopHeader } from './shell/TopHeader';
 import { HomeView } from './views/home';
 import { LoginView } from './views/login';
-import { FindIdView, FindPwView, MyPageView } from './views/_placeholders';
+import { MyPageView } from './views/_placeholders';
+import { FindIdView } from './views/find_id';
+import { FindPwView } from './views/find_pw';
 import { SignupView } from './views/signup';
 import { DashboardView } from './views/dashboard';
 import { OrderListView } from './views/order_list';
@@ -52,8 +54,8 @@ function Shell() {
         {authReady && !session && route === 'home' && <HomeView onLogin={() => setRoute('login')} onSignup={() => setRoute('signup')} />}
         {authReady && !session && route === 'login' && <LoginView onFindId={() => setRoute('findId')} onFindPw={() => setRoute('findPw')} />}
         {authReady && !session && route === 'signup' && <SignupView onDone={() => setRoute('login')} />}
-        {authReady && !session && route === 'findId' && <FindIdView />}
-        {authReady && !session && route === 'findPw' && <FindPwView />}
+        {authReady && !session && route === 'findId' && <FindIdView onDone={() => setRoute('login')} />}
+        {authReady && !session && route === 'findPw' && <FindPwView onDone={() => setRoute('login')} />}
 
         {authReady && session && route === 'dashboard' && <DashboardView />}
         {authReady && session && route === 'orders' && <OrderListView />}

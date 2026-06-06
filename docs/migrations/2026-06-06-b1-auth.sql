@@ -13,7 +13,7 @@ create or replace function check_username(p_username text)
 returns boolean
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select exists(select 1 from member_info where username = p_username);
 $$;
@@ -26,7 +26,7 @@ create or replace function signup_member(
 returns json
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare v_id bigint;
 begin
@@ -48,13 +48,13 @@ create or replace function verify_login(p_username text, p_password text)
 returns json
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select json_build_object('id', id, 'shop_name', shop_name,
                            'username', username, 'is_approved', is_approved)
   from member_info
   where username = p_username
-    and password = crypt(p_password, password);
+    and password = crypt(p_password, password::text);
 $$;
 
 -- remember_token 발급 (해시 저장, 30일 만료, 평문 반환)
@@ -62,7 +62,7 @@ create or replace function issue_remember_token(p_user_id bigint)
 returns text
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare v_token text;
 begin
@@ -80,7 +80,7 @@ create or replace function verify_remember_token(p_user_id bigint, p_token text)
 returns json
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   select json_build_object('id', id, 'shop_name', shop_name, 'username', username)
   from member_info
@@ -95,24 +95,28 @@ create or replace function clear_remember_token(p_user_id bigint)
 returns void
 language sql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
   update member_info
      set remember_token_hash = null, remember_token_expires_at = null
    where id = p_user_id;
 $$;
 
--- 컬럼 권한: anon 의 password/remember_token_* 직접 SELECT 차단
+-- 컬럼 권한: anon/authenticated 의 password/remember_token_* 직접 SELECT 차단
 revoke select on member_info from anon;
 grant select (id, username, shop_name, representative_name,
               landline_number, mobile_number, email, address,
               address_detail, is_approved, created_at) on member_info to anon;
+revoke select on member_info from authenticated;
+grant select (id, username, shop_name, representative_name,
+              landline_number, mobile_number, email, address,
+              address_detail, is_approved, created_at) on member_info to authenticated;
 grant execute on function check_username(text), signup_member(text,text,text,text,text,text,text,text,text),
   verify_login(text,text), issue_remember_token(bigint),
   verify_remember_token(bigint,text), clear_remember_token(bigint) to anon;
 
 -- ===== 마이그레이션 2: 기존 평문 비번 해싱 (멱등 가드) =====
 update member_info
-   set password = crypt(password, gen_salt('bf'))
+   set password = crypt(password::text, gen_salt('bf'))
  where password is not null
    and password not like '$2%';

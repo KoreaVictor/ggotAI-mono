@@ -1,33 +1,64 @@
-import React, { createContext, useContext, useState, useCallback } from 'react';
+import React, { createContext, useContext, useState, useCallback, useEffect } from 'react';
 import { supabase } from '../supabase';
-import { authenticate, type AuthClient, type Session, type AuthResult } from './authenticate';
-
-// supabase-js 의 쿼리 빌더는 실제로 .from().select().eq().maybeSingle() 를 제공해
-// 런타임상 AuthClient 계약을 만족하지만, PostgrestBuilder(thenable)·깊은 제네릭 테이블
-// 타입 때문에 TS 구조적 할당이 실패한다. 단일 호출 지점에서만 좁혀 어댑팅한다.
-const authClient = supabase as unknown as AuthClient;
+import { authenticate, type Session, type AuthResult, type AuthClient } from './authenticate';
+import { restoreSession, type RpcLike, type TokenStore } from './rememberToken';
 
 interface SessionContextValue {
   session: Session | null;
-  login: (username: string, password: string) => Promise<AuthResult>;
+  authReady: boolean; // 자동로그인 검증 완료 여부(셸 로딩 게이팅)
+  login: (username: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
   logout: () => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
 
+// supabase 의 .rpc() 는 구조적으로 AuthClient/RpcLike 를 만족(타입은 단일 캐스트)
+const rpcClient = supabase as unknown as AuthClient & RpcLike;
+
+// Electron safeStorage 어댑터(웹 dev 에서는 무음 skip)
+const electronStore: TokenStore = {
+  load: async () => (await window.electronAPI?.loadRememberToken?.()) ?? null,
+  clear: async () => { await window.electronAPI?.clearRememberToken?.(); },
+};
+
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
+  const [authReady, setAuthReady] = useState(false);
 
-  const login = useCallback(async (username: string, password: string) => {
-    const result = await authenticate(authClient, username, password);
-    if (result.ok && result.session) setSession(result.session);
+  // 앱 시작 1회: 자동로그인 시도
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      try {
+        const restored = await restoreSession(rpcClient, electronStore);
+        if (active && restored) setSession(restored);
+      } finally {
+        if (active) setAuthReady(true);
+      }
+    })();
+    return () => { active = false; };
+  }, []);
+
+  const login = useCallback(async (username: string, password: string, rememberMe = false) => {
+    const result = await authenticate(rpcClient, username, password);
+    if (result.ok && result.session) {
+      setSession(result.session);
+      if (rememberMe && window.electronAPI?.saveRememberToken) {
+        const { data } = await rpcClient.rpc('issue_remember_token', { p_user_id: result.session.shopKey });
+        if (typeof data === 'string') await window.electronAPI.saveRememberToken(result.session.shopKey, data);
+      }
+    }
     return result;
   }, []);
 
-  const logout = useCallback(() => setSession(null), []);
+  const logout = useCallback(() => {
+    if (session) void rpcClient.rpc('clear_remember_token', { p_user_id: session.shopKey });
+    void window.electronAPI?.clearRememberToken?.();
+    setSession(null);
+  }, [session]);
 
   return (
-    <SessionContext.Provider value={{ session, login, logout }}>
+    <SessionContext.Provider value={{ session, authReady, login, logout }}>
       {children}
     </SessionContext.Provider>
   );

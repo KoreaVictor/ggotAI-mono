@@ -1,11 +1,4 @@
 /// <reference types="vite/client" />
 
-interface ElectronAPI {
-  startService: () => Promise<{ success: boolean; error?: string }>;
-  stopService: () => Promise<{ success: boolean; error?: string }>;
-  getServiceStatus: () => Promise<{ status: 'RUNNING' | 'STOPPED' | 'NOT_INSTALLED'; error?: string }>;
-}
-
-interface Window {
-  electronAPI: ElectronAPI;
-}
+// window.electronAPI 의 권위 타입 선언은 src/types/electron.d.ts 로 일원화한다
+// (remember_token IPC 3메서드 포함). 여기 중복 선언은 충돌을 일으켜 제거했다.

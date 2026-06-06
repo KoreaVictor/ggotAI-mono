@@ -5,7 +5,7 @@ export function LoginView({ onFindId, onFindPw }: { onFindId: () => void; onFind
   const { login } = useSession();
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
-  const [autoLogin, setAutoLogin] = useState(false); // 표시만(영구화는 B)
+  const [autoLogin, setAutoLogin] = useState(false); // 자동로그인(영구 remember_token 발급)
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
 
@@ -25,7 +25,7 @@ export function LoginView({ onFindId, onFindPw }: { onFindId: () => void; onFind
     e.preventDefault();
     setError('');
     setBusy(true);
-    const r = await login(username.trim(), password);
+    const r = await login(username.trim(), password, autoLogin);
     setBusy(false);
     if (!r.ok) setError(r.error ?? '로그인에 실패했습니다');
   };

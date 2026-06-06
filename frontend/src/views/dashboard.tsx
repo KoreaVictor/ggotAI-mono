@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { 
   Play, Square, AlertCircle, RefreshCw, Phone, Smartphone, 
-  Globe, Radio, MessageSquare, ShieldAlert, Sparkles, CheckCircle2, Clock
+  Globe, Radio, MessageSquare, ShieldAlert, Sparkles, CheckCircle2, Clock, X
 } from 'lucide-react';
 
 interface Stats {

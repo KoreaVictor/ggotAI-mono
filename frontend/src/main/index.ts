@@ -174,7 +174,9 @@ ipcMain.handle('auth:load', async () => {
     if (!fs.existsSync(p) || !safeStorage.isEncryptionAvailable()) return null;
     const dec = safeStorage.decryptString(fs.readFileSync(p));
     return JSON.parse(dec) as { userId: number; token: string };
-  } catch {
+  } catch (err) {
+    console.error('토큰 로드 실패:', err);
+    try { fs.unlinkSync(tokenFilePath()); } catch { /* 이미 없거나 삭제 불가 — 무시 */ }
     return null;
   }
 });

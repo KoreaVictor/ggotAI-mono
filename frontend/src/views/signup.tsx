@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { supabase } from '../supabase';
 import { validateSignup, type SignupForm } from '../signup/validate';
 import { openPostcodeSearch } from '../utils/daumPostcode';
+import { PhoneVerify } from '../components/PhoneVerify';
 
 const EMPTY: SignupForm = {
   username: '', password: '', passwordConfirm: '', shopName: '',
@@ -15,6 +16,7 @@ export function SignupView({ onDone }: { onDone: () => void }) {
   const [dupMsg, setDupMsg] = useState('');
   const [error, setError] = useState('');
   const [busy, setBusy] = useState(false);
+  const [verifyToken, setVerifyToken] = useState<string | null>(null);
 
   const set = (k: keyof SignupForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
     setF((p) => ({ ...p, [k]: e.target.value }));
@@ -52,16 +54,22 @@ export function SignupView({ onDone }: { onDone: () => void }) {
     setError('');
     const v = validateSignup(f);
     if (v) { setError(v); return; }
+    if (!verifyToken) { setError('핸드폰 인증을 완료해주세요'); return; }
     setBusy(true);
     const { error: e2 } = await supabase.rpc('signup_member', {
       p_username: f.username.trim(), p_password: f.password, p_shop_name: f.shopName.trim(),
       p_representative_name: f.representativeName.trim(), p_landline: f.landline || null,
       p_mobile: f.mobile.trim(), p_email: f.email || null, p_address: f.address || null,
       p_address_detail: f.addressDetail || null,
+      p_verification_token: verifyToken,
     });
     setBusy(false);
     if (e2) {
-      setError(/USERNAME_TAKEN/.test(e2.message) ? '이미 사용 중인 아이디입니다' : '회원가입 중 오류가 발생했습니다');
+      setError(
+        /USERNAME_TAKEN/.test(e2.message) ? '이미 사용 중인 아이디입니다'
+        : /PHONE_NOT_VERIFIED/.test(e2.message) ? '핸드폰 인증을 다시 진행해주세요'
+        : '회원가입 중 오류가 발생했습니다',
+      );
       return;
     }
     alert('회원가입이 완료되었습니다. 관리자 승인 후 로그인할 수 있습니다.');
@@ -85,10 +93,15 @@ export function SignupView({ onDone }: { onDone: () => void }) {
         <input value={f.representativeName} onChange={set('representativeName')} onKeyDown={focusNext} placeholder="대표자명" className={INPUT} />
         <input value={f.landline} onChange={set('landline')} onKeyDown={focusNext} placeholder="전화(선택)" className={INPUT} />
 
-        <div className="flex gap-2">
-          <input value={f.mobile} onChange={set('mobile')} onKeyDown={focusNext} placeholder="핸드폰" className={INPUT} />
-          <button type="button" disabled title="다음 단계(B2)에서 제공됩니다" className="shrink-0 px-3 rounded-lg border border-brand-border text-xs text-brand-text-muted opacity-50 cursor-not-allowed">인증</button>
-        </div>
+        <input
+          value={f.mobile}
+          onChange={set('mobile')}
+          onKeyDown={focusNext}
+          placeholder="핸드폰"
+          disabled={!!verifyToken}
+          className={INPUT}
+        />
+        <PhoneVerify phone={f.mobile} purpose="signup" onVerified={setVerifyToken} />
 
         <input value={f.email} onChange={set('email')} onKeyDown={focusNext} placeholder="이메일(선택)" className={INPUT} />
 

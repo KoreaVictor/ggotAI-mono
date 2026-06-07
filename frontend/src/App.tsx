@@ -3,7 +3,7 @@ import { SessionProvider, useSession } from './session/SessionContext';
 import { TopHeader } from './shell/TopHeader';
 import { HomeView } from './views/home';
 import { LoginView } from './views/login';
-import { MyPageView } from './views/_placeholders';
+import { MyPageView } from './views/mypage';
 import { FindIdView } from './views/find_id';
 import { FindPwView } from './views/find_pw';
 import { SignupView } from './views/signup';

@@ -8,6 +8,7 @@ interface SessionContextValue {
   authReady: boolean; // 자동로그인 검증 완료 여부(셸 로딩 게이팅)
   login: (username: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
   logout: () => void;
+  updateShopName: (name: string) => void;
 }
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -57,8 +58,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setSession(null);
   }, [session]);
 
+  const updateShopName = useCallback((name: string) => {
+    setSession((s) => (s ? { ...s, shopName: name } : s));
+  }, []);
+
   return (
-    <SessionContext.Provider value={{ session, authReady, login, logout }}>
+    <SessionContext.Provider value={{ session, authReady, login, logout, updateShopName }}>
       {children}
     </SessionContext.Provider>
   );

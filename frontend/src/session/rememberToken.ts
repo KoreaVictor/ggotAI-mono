@@ -19,7 +19,9 @@ interface RememberRow {
  * 로컬 저장 토큰으로 세션을 복원한다. 토큰 없으면 null,
  * 검증 실패/에러면 로컬 토큰을 정리하고 null.
  */
-export async function restoreSession(rpc: RpcLike, store: TokenStore): Promise<Session | null> {
+export async function restoreSession(
+  rpc: RpcLike, store: TokenStore,
+): Promise<{ session: Session; token: string } | null> {
   const saved = await store.load();
   if (!saved) return null;
 
@@ -33,5 +35,8 @@ export async function restoreSession(rpc: RpcLike, store: TokenStore): Promise<S
     return null;
   }
   const row = data as RememberRow;
-  return { shopKey: row.id, shopName: row.shop_name, username: row.username };
+  return {
+    session: { shopKey: row.id, shopName: row.shop_name, username: row.username },
+    token: saved.token,
+  };
 }

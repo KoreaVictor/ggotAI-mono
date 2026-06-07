@@ -6,6 +6,7 @@ import { restoreSession, type RpcLike, type TokenStore } from './rememberToken';
 interface SessionContextValue {
   session: Session | null;
   authReady: boolean; // 자동로그인 검증 완료 여부(셸 로딩 게이팅)
+  readToken: string | null;
   login: (username: string, password: string, rememberMe?: boolean) => Promise<AuthResult>;
   logout: () => void;
   updateShopName: (name: string) => void;
@@ -25,6 +26,7 @@ const electronStore: TokenStore = {
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [authReady, setAuthReady] = useState(false);
+  const [readToken, setReadToken] = useState<string | null>(null);
 
   // 앱 시작 1회: 자동로그인 시도
   useEffect(() => {
@@ -32,7 +34,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const restored = await restoreSession(rpcClient, electronStore);
-        if (active && restored) setSession(restored);
+        if (active && restored) { setSession(restored.session); setReadToken(restored.token); }
       } finally {
         if (active) setAuthReady(true);
       }
@@ -44,9 +46,12 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     const result = await authenticate(rpcClient, username, password);
     if (result.ok && result.session) {
       setSession(result.session);
-      if (rememberMe && window.electronAPI?.saveRememberToken) {
-        const { data } = await rpcClient.rpc('issue_remember_token', { p_user_id: result.session.shopKey });
-        if (typeof data === 'string') await window.electronAPI.saveRememberToken(result.session.shopKey, data);
+      const { data: token } = await rpcClient.rpc('issue_remember_token', { p_user_id: result.session.shopKey });
+      if (typeof token === 'string') {
+        setReadToken(token);
+        if (rememberMe && window.electronAPI?.saveRememberToken) {
+          await window.electronAPI.saveRememberToken(result.session.shopKey, token);
+        }
       }
     }
     return result;
@@ -56,6 +61,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     if (session) void rpcClient.rpc('clear_remember_token', { p_user_id: session.shopKey });
     void window.electronAPI?.clearRememberToken?.();
     setSession(null);
+    setReadToken(null);
   }, [session]);
 
   const updateShopName = useCallback((name: string) => {
@@ -63,7 +69,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <SessionContext.Provider value={{ session, authReady, login, logout, updateShopName }}>
+    <SessionContext.Provider value={{ session, authReady, readToken, login, logout, updateShopName }}>
       {children}
     </SessionContext.Provider>
   );

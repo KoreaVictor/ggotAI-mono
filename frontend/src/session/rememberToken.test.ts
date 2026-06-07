@@ -17,10 +17,10 @@ describe('restoreSession', () => {
     expect(store.clear).not.toHaveBeenCalled();
   });
 
-  it('검증 성공이면 세션 반환', async () => {
+  it('검증 성공이면 세션+토큰 반환', async () => {
     const store = fakeStore({ userId: 7, token: 't' });
     const r = await restoreSession(fakeRpc({ id: 7, shop_name: '서울꽃집', username: 'seoul' }), store);
-    expect(r).toEqual({ shopKey: 7, shopName: '서울꽃집', username: 'seoul' });
+    expect(r).toEqual({ session: { shopKey: 7, shopName: '서울꽃집', username: 'seoul' }, token: 't' });
   });
 
   it('검증 실패(null)면 null + 로컬 토큰 정리', async () => {

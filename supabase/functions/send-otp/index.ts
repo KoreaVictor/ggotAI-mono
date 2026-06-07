@@ -2,7 +2,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from '../_shared/cors.ts';
 import { getProvider } from './provider.ts';
 
-const VALID_PURPOSES = ['signup', 'find_id', 'find_pw'];
+const VALID_PURPOSES = ['signup', 'find_id', 'find_pw', 'update_profile'];
 
 function json(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {

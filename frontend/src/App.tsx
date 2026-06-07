@@ -3,7 +3,7 @@ import { SessionProvider, useSession } from './session/SessionContext';
 import { TopHeader } from './shell/TopHeader';
 import { HomeView } from './views/home';
 import { LoginView } from './views/login';
-import { MyPageView } from './views/_placeholders';
+import { MyPageView } from './views/mypage';
 import { FindIdView } from './views/find_id';
 import { FindPwView } from './views/find_pw';
 import { SignupView } from './views/signup';
@@ -33,10 +33,12 @@ function Shell() {
     return () => { active = false; clearInterval(t); };
   }, []);
 
-  // 로그인/로그아웃 시 기본 라우트 보정
+  // 로그인/로그아웃 "전환" 시에만 기본 라우트 보정.
+  // (session 객체 자체가 갱신돼도 — 예: 마이페이지 shop_name 변경 — 라우트를 튕기지 않도록 로그인 여부 불리언에 의존)
+  const isLoggedIn = !!session;
   useEffect(() => {
-    setRoute(session ? 'dashboard' : 'home');
-  }, [session]);
+    setRoute(isLoggedIn ? 'dashboard' : 'home');
+  }, [isLoggedIn]);
 
   return (
     <div className="flex flex-col h-screen bg-brand-bg text-brand-text-primary overflow-hidden font-sans">

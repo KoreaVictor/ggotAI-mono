@@ -1,4 +1,4 @@
-export type Purpose = 'signup' | 'find_id' | 'find_pw';
+export type Purpose = 'signup' | 'find_id' | 'find_pw' | 'update_profile';
 
 // 테스트 주입용 최소 계약 (supabase.rpc / supabase.functions 와 호환)
 export type OtpRpc = (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;

@@ -3,6 +3,10 @@
 .env.local
 .env.*.local
 
+# Supabase CLI 부산물
+supabase/.temp/
+supabase/.branches/
+
 # Python
 __pycache__/
 *.py[cod]

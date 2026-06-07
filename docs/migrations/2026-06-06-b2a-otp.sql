@@ -206,7 +206,9 @@ $$;
 
 -- ===== 권한 =====
 -- request_otp: service_role 전용 (anon/public 코드 수확 차단)
-revoke execute on function request_otp(text,text) from public;
+-- ⚠️ Supabase는 ALTER DEFAULT PRIVILEGES로 신규 함수에 anon/authenticated EXECUTE를
+--    자동 부여하므로 from public 만으로는 부족 — anon/authenticated 명시적 revoke 필수.
+revoke execute on function request_otp(text,text) from public, anon, authenticated;
 grant execute on function request_otp(text,text) to service_role;
 -- 나머지: anon
 grant execute on function

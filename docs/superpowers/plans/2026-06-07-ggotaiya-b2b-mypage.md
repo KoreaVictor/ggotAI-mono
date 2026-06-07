@@ -217,7 +217,8 @@ Expected: `[]` (에러 없음).
 
 Run: 아래 DO 블록 1회 실행(실패 시 예외 → 에러로 표면화, 성공 시 `[]`).
 
-> 주의: `request_otp` 는 (phone,purpose) 별 30초 쓰로틀이 있어 같은 폰에 연속 호출이 막힌다. 스모크는 superuser 로 실행되므로 **검증된 `phone_verification` 행을 알려진 토큰으로 직접 시드**해 `update_account` 로직만 검증한다(request_otp/verify_otp 의 update_profile 동작은 Task 2 EF 스모크 + B2a 에서 커버). 인라인 헬퍼 `seed_tok(phone, token)` 으로 반복을 줄인다.
+> 주의: `request_otp` 는 (phone,purpose) 별 30초 쓰로틀이 있어 같은 폰에 연속 호출이 막힌다. 스모크는 superuser 로 실행되므로 **검증된 `phone_verification` 행을 알려진 토큰으로 직접 시드**해 `update_account` 로직만 검증한다(request_otp/verify_otp 의 update_profile 동작은 Task 2 EF 스모크 + B2a 에서 커버).
+> ⚠️ 각 시드 insert 에 `created_at = clock_timestamp()` 를 명시한다. DO 블록 단일 트랜잭션에서 `now()`(=created_at 기본값)는 고정값이라 미소비 잔여 토큰과 새 토큰의 `created_at` 이 같아져 `order by created_at desc` 가 엉뚱한 토큰을 골라 `invalid_token` 오탐이 난다. `clock_timestamp()` 는 트랜잭션 내에서 증가하므로 최신 시드가 확정적으로 선택된다.
 
 ```sql
 do $$
@@ -235,42 +236,42 @@ begin
   if (r#>>'{profile,shop_name}') <> '스모크B' then raise exception 'GP: %', r; end if;
 
   -- 2) 프로필만 수정 (PH 권한 토큰 TKA1 시드)
-  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at)
-  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA1',gen_salt('bf')),now()+interval '10 min');
+  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at,created_at)
+  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA1',gen_salt('bf')),now()+interval '10 min',clock_timestamp());
   r := update_account('b2bsmoke','TKA1','새가게','새대표','02-1','e@e.com','서울','101', null,null, null,null);
   if (r#>>'{profile,shop_name}') <> '새가게' then raise exception 'UA profile: %', r; end if;
 
   -- 3) 비번 변경 (현재 비번 pw_old_1 → pw_new_2)
-  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at)
-  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA2',gen_salt('bf')),now()+interval '10 min');
+  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at,created_at)
+  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA2',gen_salt('bf')),now()+interval '10 min',clock_timestamp());
   r := update_account('b2bsmoke','TKA2','새가게','새대표','02-1','e@e.com','서울','101', null,null, 'pw_old_1','pw_new_2');
   if (r->>'ok')::boolean is not true then raise exception 'UA pwchange: %', r; end if;
   login := verify_login('b2bsmoke','pw_new_2');
   if (login->>'username') <> 'b2bsmoke' then raise exception 'verify_login after pw: %', login; end if;
 
   -- 4) 틀린 현재 비번 → bad_password (토큰 미소비)
-  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at)
-  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA3',gen_salt('bf')),now()+interval '10 min');
+  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at,created_at)
+  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA3',gen_salt('bf')),now()+interval '10 min',clock_timestamp());
   r := update_account('b2bsmoke','TKA3','새가게','새대표','02-1','e@e.com','서울','101', null,null, 'WRONG','pw_x');
   if (r->>'reason') <> 'bad_password' then raise exception 'UA badpw: %', r; end if;
 
   -- 5) 핸드폰 변경: 새폰 토큰 없음 → new_phone_unverified
-  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at)
-  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA4',gen_salt('bf')),now()+interval '10 min');
+  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at,created_at)
+  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA4',gen_salt('bf')),now()+interval '10 min',clock_timestamp());
   r := update_account('b2bsmoke','TKA4','새가게','새대표','02-1','e@e.com','서울','101', PH2, null, null,null);
   if (r->>'reason') <> 'new_phone_unverified' then raise exception 'UA newphone missing: %', r; end if;
 
   -- 6) 핸드폰 변경 정상(PH 권한 TKA5 + PH2 소유 TKB1)
-  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at)
-  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA5',gen_salt('bf')),now()+interval '10 min');
-  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at)
-  values (PH2,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKB1',gen_salt('bf')),now()+interval '10 min');
+  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at,created_at)
+  values (PH,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKA5',gen_salt('bf')),now()+interval '10 min',clock_timestamp());
+  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at,created_at)
+  values (PH2,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKB1',gen_salt('bf')),now()+interval '10 min',clock_timestamp());
   r := update_account('b2bsmoke','TKA5','새가게','새대표','02-1','e@e.com','서울','101', PH2, 'TKB1', null,null);
   if (r#>>'{profile,mobile_number}') <> PH2 then raise exception 'UA phonechange: %', r; end if;
 
   -- 7) 타계정 토큰(다른 폰 PHX) → invalid_token (현재폰은 이제 PH2; PHX 토큰은 권한 조회에서 제외됨)
-  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at)
-  values (PHX,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKX1',gen_salt('bf')),now()+interval '10 min');
+  insert into phone_verification(phone,purpose,code_hash,expires_at,verified,token_hash,token_expires_at,created_at)
+  values (PHX,'update_profile',crypt('c',gen_salt('bf')),now()+interval '3 min',true,crypt('TKX1',gen_salt('bf')),now()+interval '10 min',clock_timestamp());
   r := update_account('b2bsmoke','TKX1','x','y',null,null,null,null, null,null, null,null);
   if (r->>'reason') <> 'invalid_token' then raise exception 'UA wrongacct: %', r; end if;
 
@@ -284,15 +285,16 @@ Expected: `[]`. 어떤 단언이라도 실패하면 에러 JSON 반환.
 
 - [ ] **Step 5: 권한 검증 (컨트롤러 직접)**
 
+> ⚠️ `has_table_privilege('anon','member_info','select')` 는 회수 전에도 `false` 다 — 기존 권한이 **컬럼 레벨** grant 라서 테이블 레벨 검사로는 구멍이 안 잡힌다. 반드시 `information_schema.column_privileges` 의 anon/authenticated 행 수가 0 인지로 검증한다. (테이블 레벨 revoke 가 컬럼 grant 까지 정리함 — 실측 확인.)
 ```sql
-select has_table_privilege('anon','member_info','select')  as anon_sel,     -- false 기대
-       has_table_privilege('anon','member_info','update')  as anon_upd,     -- false 기대
+select (select count(*) from information_schema.column_privileges
+          where table_name='member_info' and grantee in ('anon','authenticated')) as anon_cols,  -- 0 기대
        has_function_privilege('anon','get_profile(text)','execute') as anon_gp,  -- true
        has_function_privilege('anon','update_account(text,text,text,text,text,text,text,text,text,text,text,text)','execute') as anon_ua,  -- true
        has_function_privilege('anon','verify_login(text,text)','execute') as anon_vl,  -- true(기존 RPC 동작)
        (select count(*) from member_info where username='b2bsmoke') as leftover;  -- 0
 ```
-Expected: `anon_sel=false, anon_upd=false, anon_gp=true, anon_ua=true, anon_vl=true, leftover=0`.
+Expected: `anon_cols=0, anon_gp=true, anon_ua=true, anon_vl=true, leftover=0`.
 
 - [ ] **Step 6: 마이그레이션 SQL 파일 커밋**
 

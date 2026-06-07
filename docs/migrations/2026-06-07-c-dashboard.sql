@@ -61,7 +61,7 @@ begin
            (select od.rpa_status from order_details od where od.call_history_id = sch.id order by od.id desc limit 1) as rpa_status,
            sch.created_at
     from server_call_history sch
-    where sch.shop_key = p_shop_key
+    where sch.shop_key = p_shop_key and sch.created_at >= v_today  -- 오늘 경계: 현재작업/피드는 금일 활동만
     order by sch.created_at desc
     limit 8
   ) f;

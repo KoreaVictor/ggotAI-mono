@@ -9,6 +9,8 @@ import androidx.work.WorkerParameters
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
 import com.ggotai.hp.manager.UploadManager
+import com.ggotai.hp.util.CallLogReader
+import com.ggotai.hp.util.CustomerResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -35,8 +37,10 @@ class CallSyncWorker(
             return@withContext Result.success()
         }
 
-        val customerNumber = inputData.getString(KEY_CUSTOMER_NUMBER) ?: "Unknown"
-        Log.d(TAG, "CallSyncWorker 시작 - 대상 번호: $customerNumber")
+        // CallLog에서 가장 최근 통화 번호/연락처명 확보 (EXTRA_INCOMING_NUMBER는 Android 10+ 일반앱에 null)
+        val callLog = CallLogReader.latestCall(context)
+        val customerNumber = CustomerResolver.resolveNumber(callLog?.number)
+        Log.d(TAG, "CallSyncWorker 시작 - 대상 번호: $customerNumber (CallLog name=${callLog?.cachedName})")
 
         try {
             UploadManager.initTts(context)
@@ -51,7 +55,10 @@ class CallSyncWorker(
             val audioFileName = if (recordFilePath != null) File(recordFilePath).name else ""
             val durationSeconds = if (recordFilePath != null) getAudioDuration(recordFilePath) else 0
             
-            val matchedName = getContactName(context, customerNumber)
+            val contactName = if (customerNumber != CustomerResolver.UNKNOWN_NUMBER) {
+                getContactName(context, customerNumber)
+            } else null
+            val matchedName = CustomerResolver.resolveName(callLog?.cachedName, contactName)
 
             val callHistory = CallHistory(
                 userPhoneNumber = userPhoneNumber,

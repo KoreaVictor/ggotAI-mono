@@ -25,7 +25,6 @@ class CallSyncWorker(
 
     companion object {
         private const val TAG = "CallSyncWorker"
-        const val KEY_CUSTOMER_NUMBER = "CUSTOMER_NUMBER"
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {

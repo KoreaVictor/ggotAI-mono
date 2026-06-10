@@ -22,6 +22,9 @@ interface CallHistoryDao {
     @Query("SELECT * FROM call_history WHERE sync_status = 0")
     suspend fun getUnsynced(): List<CallHistory>
 
+    @Query("SELECT * FROM call_history WHERE sync_status = 0 AND transfer_status = '실패' AND retry_count < :max")
+    suspend fun getRetryable(max: Int): List<CallHistory>
+
     @Query("UPDATE call_history SET transfer_status = '실패', error_code = 'APP_KILLED' WHERE transfer_status = '전송중'")
     suspend fun markPendingAsFailed()
 

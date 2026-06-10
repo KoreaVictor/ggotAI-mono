@@ -41,8 +41,21 @@ class ResendActivity : AppCompatActivity() {
             binding.tvCurrentStatus.setTextColor(android.graphics.Color.parseColor("#757575")) // Gray
             
             lifecycleScope.launch {
+                // 수동 재전송: 영구실패(sync=2) 건도 다시 자동 재시도 대상이 되도록 리셋
+                run {
+                    val resetDb = AppDatabase.getDatabase(applicationContext)
+                    withContext(Dispatchers.IO) {
+                        val h = resetDb.callHistoryDao().getAll().find { it.id == historyId }
+                        if (h != null) {
+                            h.retryCount = 0
+                            h.syncStatus = 0
+                            resetDb.callHistoryDao().update(h)
+                        }
+                    }
+                }
+
                 UploadManager.uploadCallHistory(applicationContext, historyId)
-                
+
                 // 다시 로드하여 상태 확인
                 val db = AppDatabase.getDatabase(applicationContext)
                 val updatedHistory = withContext(Dispatchers.IO) {

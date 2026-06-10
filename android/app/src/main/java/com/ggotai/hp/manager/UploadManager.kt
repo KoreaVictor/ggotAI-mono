@@ -33,16 +33,19 @@ object UploadManager {
         }
     }
 
+    /**
+     * 통화 직후 즉시 업로드. 최대 3회 재시도하고, 최종 실패 시 '실패' 처리 + TTS 알림.
+     * (워커가 아닌 즉시 경로 전용)
+     */
     suspend fun uploadCallHistory(context: Context, historyId: Int) {
         withContext(Dispatchers.IO) {
             val db = AppDatabase.getDatabase(context)
             val dao = db.callHistoryDao()
-            
-            // Wait a moment for DB insertion to complete just in case
+
+            // DB insert 완료를 잠깐 대기
             delay(500)
-            
-            val histories = dao.getAll()
-            val history = histories.find { it.id == historyId } ?: return@withContext
+
+            val history = dao.getAll().find { it.id == historyId } ?: return@withContext
 
             val file = File(history.audioFilePath)
             if (!file.exists()) {
@@ -53,47 +56,82 @@ object UploadManager {
 
             var attempt = 0
             var success = false
-
             while (attempt < MAX_RETRIES && !success) {
-                try {
-                    Log.d(TAG, "Upload attempt ${attempt + 1}")
-                    
-                    val userPhoneRb = history.userPhoneNumber.toRequestBody("text/plain".toMediaTypeOrNull())
-                    val phoneRb = history.phoneNumber.toRequestBody("text/plain".toMediaTypeOrNull())
-                    val nameRb = history.customerName.toRequestBody("text/plain".toMediaTypeOrNull())
-                    val dateRb = history.callDate.toRequestBody("text/plain".toMediaTypeOrNull())
-                    val timeRb = history.callTime.toRequestBody("text/plain".toMediaTypeOrNull())
-                    val durationRb = (history.durationSeconds?.toString() ?: "0").toRequestBody("text/plain".toMediaTypeOrNull())
-                    
-                    val reqFile = file.asRequestBody("audio/mpeg".toMediaTypeOrNull()) // mp3 or m4a
-                    val audioPart = MultipartBody.Part.createFormData("audio_file", file.name, reqFile)
-
-                    val response = RetrofitClient.instance.uploadCall(
-                        userPhoneRb, phoneRb, nameRb, dateRb, timeRb, durationRb, audioPart
-                    )
-
-                    if (response.isSuccessful && response.body()?.status == "success") {
-                        success = true
-                        history.transferStatus = "성공"
-                        history.syncStatus = 1
-                        history.errorCode = null
-                        history.errorMessage = null
-                        dao.update(history)
-                        Log.d(TAG, "Upload success")
-                    } else {
-                        throw Exception(response.body()?.message ?: "서버 업로드 실패")
-                    }
-                } catch (e: Exception) {
+                success = uploadOnce(context, historyId)
+                if (!success) {
                     attempt++
-                    Log.e(TAG, "Upload failed: ${e.message}")
-                    if (attempt < MAX_RETRIES) {
-                        delay(RETRY_DELAY_MS)
-                    } else {
-                        markFailed(dao, history, "SERVER_500", e.message ?: "알 수 없는 오류")
-                        playTtsError(context)
-                    }
+                    if (attempt < MAX_RETRIES) delay(RETRY_DELAY_MS)
                 }
             }
+
+            if (!success) {
+                val fresh = dao.getAll().find { it.id == historyId }
+                if (fresh != null) {
+                    markFailed(
+                        dao,
+                        fresh,
+                        fresh.errorCode ?: "SERVER_500",
+                        fresh.errorMessage ?: "알 수 없는 오류"
+                    )
+                }
+                playTtsError(context)
+            }
+        }
+    }
+
+    /**
+     * 1건을 1회만 업로드 시도한다.
+     * 성공 → transfer_status='성공', sync_status=1 로 갱신하고 true.
+     * 실패 → error_code/error_message 만 기록하고 false (transfer_status/sync_status/retry_count는 호출자가 관리).
+     */
+    suspend fun uploadOnce(context: Context, historyId: Int): Boolean = withContext(Dispatchers.IO) {
+        val dao = AppDatabase.getDatabase(context).callHistoryDao()
+        val history = dao.getAll().find { it.id == historyId } ?: return@withContext false
+
+        val file = File(history.audioFilePath)
+        if (!file.exists()) {
+            history.errorCode = "FILE_NOT_FOUND"
+            history.errorMessage = "오디오 파일이 존재하지 않습니다."
+            dao.update(history)
+            return@withContext false
+        }
+
+        try {
+            val userPhoneRb = history.userPhoneNumber.toRequestBody("text/plain".toMediaTypeOrNull())
+            val phoneRb = history.phoneNumber.toRequestBody("text/plain".toMediaTypeOrNull())
+            val nameRb = history.customerName.toRequestBody("text/plain".toMediaTypeOrNull())
+            val dateRb = history.callDate.toRequestBody("text/plain".toMediaTypeOrNull())
+            val timeRb = history.callTime.toRequestBody("text/plain".toMediaTypeOrNull())
+            val durationRb = (history.durationSeconds?.toString() ?: "0").toRequestBody("text/plain".toMediaTypeOrNull())
+
+            val reqFile = file.asRequestBody("audio/mpeg".toMediaTypeOrNull())
+            val audioPart = MultipartBody.Part.createFormData("audio_file", file.name, reqFile)
+
+            val response = RetrofitClient.instance.uploadCall(
+                userPhoneRb, phoneRb, nameRb, dateRb, timeRb, durationRb, audioPart
+            )
+
+            if (response.isSuccessful && response.body()?.status == "success") {
+                history.transferStatus = "성공"
+                history.syncStatus = 1
+                history.errorCode = null
+                history.errorMessage = null
+                dao.update(history)
+                Log.d(TAG, "Upload success (uploadOnce) id=$historyId")
+                true
+            } else {
+                history.errorCode = "SERVER_500"
+                history.errorMessage = response.body()?.message ?: "서버 업로드 실패"
+                dao.update(history)
+                Log.e(TAG, "Upload failed (uploadOnce) id=$historyId: ${history.errorMessage}")
+                false
+            }
+        } catch (e: Exception) {
+            history.errorCode = "SERVER_500"
+            history.errorMessage = e.message ?: "알 수 없는 오류"
+            dao.update(history)
+            Log.e(TAG, "Upload exception (uploadOnce) id=$historyId: ${e.message}")
+            false
         }
     }
 

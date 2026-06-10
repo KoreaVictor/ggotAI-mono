@@ -41,7 +41,16 @@
 - `[/]` 4단계: 통합 테스트 및 디버깅
   - `[x]` 프론트엔드-백엔드 간 실제 데이터 연동 테스트 (완료)
   - `[x]` 통화 녹음 파일(삼성 기본 녹음) 스캔 및 서버 전송 안정성 검증 (완료)
-  - `[ ]` 사장님 실제 기기 및 실무 환경에서의 장기 안정성 필드 테스트 (내일 진행 예정)
+  - `[/]` 사장님 실제 기기 및 실무 환경에서의 장기 안정성 필드 테스트
+    - `[x]` 실기기(Galaxy Note 10, SM-N971N) 빌드·설치·실행 검증 — 캐시 gradle 8.4 + Studio JBR로 `assembleDebug` 성공, adb 설치 후 `MainActivity` 정상 진입
+    - `[x]` **인증 버그 발견·해결**: 기기 SIM `01058921670`이 신규 스키마 `member_info`에 없어 `verify-device` 401. id=19(test/테스트꽃집, 기존 `010-0000-0000` 더미)의 `mobile_number`를 `01058921670`으로 변경 → verify-device 200(shop_key=19)·get-settings 200(기본 'Y') 확인
+
+- `[x]` 6단계: 자동 재전송 워커 (2026-06-10, 설계: `docs/superpowers/specs/2026-06-10-auto-resend-worker-design.md`)
+  - `[x]` `ResendPolicy`(상한 10회/영구실패 결정) — JVM 단위테스트 3건 통과
+  - `[x]` Room v1→v2 마이그레이션(`retry_count` 컬럼) — 실기기 업그레이드 설치로 검증(92행 보존, user_version=2)
+  - `[x]` `CallHistoryDao.getRetryable` — 인메모리 계측테스트 통과
+  - `[x]` `UploadManager.uploadOnce` 추출 + `ResendWorker`(15분 주기/NetworkType.CONNECTED/KEEP) + `MainActivity` 등록 + `ResendActivity` 리셋
+  - `[x]` **실기기 E2E 검증**: 기존 실패 82건 자동 재전송 → 전부 `sync_status=1`, 서버 `server_call_history`(shop_key=19) 적재 확인, `Worker result SUCCESS`
 
 - `[x]` 5단계: DB 구조 전면 개편 반영 (2026-06-10, 설계 출처: `ggotAIhp.pptx`)
   - `[x]` [Back] 라이브 DB 점검 및 신규 스키마 확인 (3-클라이언트 구조: ggotAIhp/ggotAIorder/ggotAIya)
@@ -58,4 +67,4 @@
   - `[x]` [Back/Front] `setting_info` 읽기 연동 — 알림 동작 제어 (use_notification SSOT)
     - `[x]` 신규 Edge Function `get-settings` (mobile_number→shop_key→setting_info, 행 없으면 기본 'Y') 구현·배포
     - `[x]` 라이브 검증: 기본값('Y')/미승인(401)/`'N'` 행 경로 전부 통과
-    - `[x]` Android: `ApiService.getSettings` + `MainActivity` 진입 시 캐시(`USE_NOTIFICATION`), `UploadManager` TTS 알림 게이팅 (※ gradle 미설치로 빌드 검증은 미실시)
+    - `[x]` Android: `ApiService.getSettings` + `MainActivity` 진입 시 캐시(`USE_NOTIFICATION`), `UploadManager` TTS 알림 게이팅 (※ 2026-06-10 실기기 빌드·실행 검증 완료)

@@ -23,6 +23,18 @@ data class UploadCallResponse(
     val error_code: String?
 )
 
+data class SettingsResponse(
+    val status: String,
+    val data: SettingsData?,
+    val error_code: String?,
+    val message: String?
+)
+
+data class SettingsData(
+    val use_notification: String,
+    val notification_phone_number: String?
+)
+
 data class DeleteCallRequest(
     val user_phone_number: String,
     val audio_file_name: String
@@ -37,6 +49,9 @@ data class DeleteCallResponse(
 interface ApiService {
     @GET("verify-device")
     suspend fun verifyDevice(@Query("phone") phone: String): Response<VerifyDeviceResponse>
+
+    @GET("get-settings")
+    suspend fun getSettings(@Query("phone") phone: String): Response<SettingsResponse>
 
     @retrofit2.http.Multipart
     @retrofit2.http.POST("upload-call")

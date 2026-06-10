@@ -55,4 +55,7 @@
     - `[x]` init 마이그레이션을 신규 5개 테이블 스키마로 재작성
     - `[x]` 3개 함수 배포 후 시드꽃집(id=8)으로 verify→upload→delete 전 과정 검증 완료
   - `[x]` [Front] Android 앱 호환성 확인 — 함수가 `mobile_number→shop_key` 내부 변환하여 **앱 무수정 호환**
-  - `[ ]` [Back] (선택) `setting_info` 읽기 연동 — 명세상 ggotAIhp R 권한 (알림 설정 등), 추후 필요 시
+  - `[x]` [Back/Front] `setting_info` 읽기 연동 — 알림 동작 제어 (use_notification SSOT)
+    - `[x]` 신규 Edge Function `get-settings` (mobile_number→shop_key→setting_info, 행 없으면 기본 'Y') 구현·배포
+    - `[x]` 라이브 검증: 기본값('Y')/미승인(401)/`'N'` 행 경로 전부 통과
+    - `[x]` Android: `ApiService.getSettings` + `MainActivity` 진입 시 캐시(`USE_NOTIFICATION`), `UploadManager` TTS 알림 게이팅 (※ gradle 미설치로 빌드 검증은 미실시)

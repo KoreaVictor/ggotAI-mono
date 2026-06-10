@@ -67,6 +67,29 @@ class MainActivity : AppCompatActivity() {
         }
 
         setupRecyclerView()
+
+        // 서버 환경설정(알림 동작 등)을 가져와 로컬에 캐시. 실패해도 앱 동작은 막지 않음.
+        fetchAndCacheSettings()
+    }
+
+    private fun fetchAndCacheSettings() {
+        val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        val phone = prefs.getString("USER_PHONE_NUMBER", null)
+        if (phone.isNullOrEmpty()) return
+
+        lifecycleScope.launch {
+            try {
+                val response = withContext(Dispatchers.IO) {
+                    RetrofitClient.instance.getSettings(phone)
+                }
+                if (response.isSuccessful && response.body()?.status == "success") {
+                    val useNotification = response.body()?.data?.use_notification ?: "Y"
+                    prefs.edit().putString("USE_NOTIFICATION", useNotification).apply()
+                }
+            } catch (e: Exception) {
+                Log.w("MainActivity", "환경설정 조회 실패 (캐시 유지): ${e.message}")
+            }
+        }
     }
 
     private fun setupRecyclerView() {

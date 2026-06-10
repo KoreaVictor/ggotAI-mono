@@ -47,7 +47,7 @@ object UploadManager {
             val file = File(history.audioFilePath)
             if (!file.exists()) {
                 markFailed(dao, history, "FILE_NOT_FOUND", "오디오 파일이 존재하지 않습니다.")
-                playTtsError()
+                playTtsError(context)
                 return@withContext
             }
 
@@ -90,7 +90,7 @@ object UploadManager {
                         delay(RETRY_DELAY_MS)
                     } else {
                         markFailed(dao, history, "SERVER_500", e.message ?: "알 수 없는 오류")
-                        playTtsError()
+                        playTtsError(context)
                     }
                 }
             }
@@ -104,7 +104,13 @@ object UploadManager {
         dao.update(history)
     }
 
-    private fun playTtsError() {
+    private fun playTtsError(context: Context) {
+        // 서버 환경설정(use_notification)이 'N'이면 알림 생략. 미조회 시 기본 'Y'(알림 ON).
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        if (prefs.getString("USE_NOTIFICATION", "Y") == "N") {
+            Log.d(TAG, "use_notification=N: TTS 실패 알림 생략")
+            return
+        }
         tts?.speak("전송에 실패했습니다. 수동으로 재전송을 눌러주세요.", TextToSpeech.QUEUE_FLUSH, null, "UploadError")
     }
 

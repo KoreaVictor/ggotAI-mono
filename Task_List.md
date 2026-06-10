@@ -1,15 +1,34 @@
 # ggotAIhp 병렬 개발 태스크 목록 (Task List)
 
-- `[x]` 1단계: 프로젝트 환경 구성 및 공통 인터페이스 정의
+> 최종 갱신: 2026-06-10 · 코드 위치: `master` (origin/master 동기화 완료)
+
+## 진행 현황 요약
+
+| 단계 | 내용 | 상태 |
+|------|------|------|
+| 1 | 프로젝트 환경 구성 및 공통 인터페이스 | ✅ 완료 |
+| 2 | 핵심 기능 (기기인증·통화감지·로컬DB) | ✅ 완료 |
+| 3 | 연동 및 고도화 (업로드·재전송·UI) | ✅ 완료 |
+| 4 | 통합 테스트 및 디버깅 | 🔄 진행 중 — 장기 안정성 필드 테스트만 남음 |
+| 5 | DB 구조 전면 개편 (3-클라이언트) | ✅ 완료 |
+| 6 | 자동 재전송 워커 | ✅ 완료 |
+
+**남은 작업:** 4단계 "사장님 실기기 장기 안정성 필드 테스트"(실사용 관찰)뿐. 그 외 모든 개발·검증 항목 완료.
+
+범례: `[x]` 완료 · `[/]` 진행 중 · `[ ]` 미착수
+
+---
+
+- `[x]` **1단계: 프로젝트 환경 구성 및 공통 인터페이스 정의**
   - `[x]` [Front] 안드로이드 프로젝트 셋업 (AntiGravity)
     - `[x]` API 29 타겟으로 프로젝트 생성
     - `[x]` Retrofit, Room DB, WorkManager 등 필수 라이브러리 의존성 추가
   - `[x]` [Back] 백엔드 프로젝트 및 DB 셋업 (Claude Code)
     - `[x]` 백엔드 서버 환경 구축 (Supabase: ggotAIhp 프로젝트 ACTIVE)
     - `[x]` `member_info`, `server_call_history` 테이블 생성 (※ 5단계에서 신규 스키마로 개편됨)
-  - `[ ]` [Common] API 인터페이스 최종 확정 (Mock 데이터 교환 테스트)
+  - `[x]` [Common] API 인터페이스 최종 확정 — Mock 교환 단계는 생략, 4단계 실데이터 연동 테스트로 대체 검증 완료
 
-- `[/]` 2단계: 핵심 기능 병렬 개발
+- `[x]` **2단계: 핵심 기능 병렬 개발**
   - `[x]` [Front] 단말기 식별 및 자동 인증 로직 구현
     - `[x]` `READ_PHONE_NUMBERS` 권한 요청 및 처리
     - `[x]` 시스템 유심(USIM) 전화번호 자동 추출 로직 작성
@@ -25,7 +44,7 @@
   - `[x]` [Front] 로컬 DB(Room) 연동 및 로컬 히스토리 관리
     - `[x]` `call_history` 테이블 Room Entity 및 DAO 작성
 
-- `[x]` 3단계: 연동 및 고도화
+- `[x]` **3단계: 연동 및 고도화**
   - `[x]` [Front] 서버 업로드 및 재전송 메커니즘, TTS 실패 알림 구현
     - `[x]` 녹음 완료 즉시 오디오 파일 업로드 API 호출 로직 작성
     - `[x]` 3회 재시도 메커니즘 및 최종 실패 시 TTS 음성 출력 구현
@@ -38,21 +57,14 @@
     - `[x]` `SearchActivity` 현황 및 필터 UI 작성
     - `[x]` 실패 건 수동 재전송 화면(`ResendActivity`) 및 연타 방지 로직 구현
 
-- `[/]` 4단계: 통합 테스트 및 디버깅
-  - `[x]` 프론트엔드-백엔드 간 실제 데이터 연동 테스트 (완료)
-  - `[x]` 통화 녹음 파일(삼성 기본 녹음) 스캔 및 서버 전송 안정성 검증 (완료)
-  - `[/]` 사장님 실제 기기 및 실무 환경에서의 장기 안정성 필드 테스트
-    - `[x]` 실기기(Galaxy Note 10, SM-N971N) 빌드·설치·실행 검증 — 캐시 gradle 8.4 + Studio JBR로 `assembleDebug` 성공, adb 설치 후 `MainActivity` 정상 진입
-    - `[x]` **인증 버그 발견·해결**: 기기 SIM `01058921670`이 신규 스키마 `member_info`에 없어 `verify-device` 401. id=19(test/테스트꽃집, 기존 `010-0000-0000` 더미)의 `mobile_number`를 `01058921670`으로 변경 → verify-device 200(shop_key=19)·get-settings 200(기본 'Y') 확인
+- `[/]` **4단계: 통합 테스트 및 디버깅**
+  - `[x]` 프론트엔드-백엔드 간 실제 데이터 연동 테스트
+  - `[x]` 통화 녹음 파일(삼성 기본 녹음) 스캔 및 서버 전송 안정성 검증
+  - `[x]` 실기기(Galaxy Note 10, SM-N971N) 빌드·설치·실행 검증 — gradlew 래퍼 복구 + Studio JBR로 `assembleDebug` 성공, adb 설치 후 `MainActivity` 정상 진입
+  - `[x]` **인증 버그 발견·해결**: 기기 SIM `01058921670`이 신규 스키마 `member_info`에 없어 `verify-device` 401. id=19(test/테스트꽃집, 기존 `010-0000-0000` 더미)의 `mobile_number`를 `01058921670`으로 변경 → verify-device 200(shop_key=19)·get-settings 200(기본 'Y') 확인
+  - `[/]` 사장님 실제 기기 및 실무 환경에서의 **장기 안정성 필드 테스트** (실사용 관찰 — 진행 중)
 
-- `[x]` 6단계: 자동 재전송 워커 (2026-06-10, 설계: `docs/superpowers/specs/2026-06-10-auto-resend-worker-design.md`)
-  - `[x]` `ResendPolicy`(상한 10회/영구실패 결정) — JVM 단위테스트 3건 통과
-  - `[x]` Room v1→v2 마이그레이션(`retry_count` 컬럼) — 실기기 업그레이드 설치로 검증(92행 보존, user_version=2)
-  - `[x]` `CallHistoryDao.getRetryable` — 인메모리 계측테스트 통과
-  - `[x]` `UploadManager.uploadOnce` 추출 + `ResendWorker`(15분 주기/NetworkType.CONNECTED/KEEP) + `MainActivity` 등록 + `ResendActivity` 리셋
-  - `[x]` **실기기 E2E 검증**: 기존 실패 82건 자동 재전송 → 전부 `sync_status=1`, 서버 `server_call_history`(shop_key=19) 적재 확인, `Worker result SUCCESS`
-
-- `[x]` 5단계: DB 구조 전면 개편 반영 (2026-06-10, 설계 출처: `ggotAIhp.pptx`)
+- `[x]` **5단계: DB 구조 전면 개편 반영** (2026-06-10, 설계 출처: `ggotAIhp.pptx`)
   - `[x]` [Back] 라이브 DB 점검 및 신규 스키마 확인 (3-클라이언트 구조: ggotAIhp/ggotAIorder/ggotAIya)
     - `[x]` `member_info`: `mobile_1~5` → 단일 `mobile_number`, `username`/`password`/`address_detail` 추가
     - `[x]` `server_call_history`: 연결키 `user_phone_number` → `shop_key`(FK member_info.id), `phone_number` → `customer_phone_number`, `channel_order`/`channel_classification` 신설
@@ -68,3 +80,10 @@
     - `[x]` 신규 Edge Function `get-settings` (mobile_number→shop_key→setting_info, 행 없으면 기본 'Y') 구현·배포
     - `[x]` 라이브 검증: 기본값('Y')/미승인(401)/`'N'` 행 경로 전부 통과
     - `[x]` Android: `ApiService.getSettings` + `MainActivity` 진입 시 캐시(`USE_NOTIFICATION`), `UploadManager` TTS 알림 게이팅 (※ 2026-06-10 실기기 빌드·실행 검증 완료)
+
+- `[x]` **6단계: 자동 재전송 워커** (2026-06-10, 설계: `docs/superpowers/specs/2026-06-10-auto-resend-worker-design.md`, 계획: `docs/superpowers/plans/2026-06-10-auto-resend-worker.md`)
+  - `[x]` `ResendPolicy` (상한 10회 → 영구실패 결정) — JVM 단위테스트 3건 통과
+  - `[x]` Room v1→v2 마이그레이션(`retry_count` 컬럼, `sync_status=2`=영구실패) — 실기기 업그레이드 설치로 검증(92행 보존, user_version=2)
+  - `[x]` `CallHistoryDao.getRetryable` (미전송·실패·상한미달 필터) — 인메모리 계측테스트 통과
+  - `[x]` `UploadManager.uploadOnce` 추출 + `ResendWorker`(15분 주기 / `NetworkType.CONNECTED` / `KEEP`) + `MainActivity` 등록 + `ResendActivity` 수동 재전송 리셋
+  - `[x]` **실기기 E2E 검증**: 기존 실패 82건 자동 재전송 → 전부 `sync_status=1`, 서버 `server_call_history`(shop_key=19) 적재 확인, `Worker result SUCCESS`

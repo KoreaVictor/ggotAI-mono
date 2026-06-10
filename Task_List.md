@@ -6,7 +6,7 @@
     - `[x]` Retrofit, Room DB, WorkManager 등 필수 라이브러리 의존성 추가
   - `[x]` [Back] 백엔드 프로젝트 및 DB 셋업 (Claude Code)
     - `[x]` 백엔드 서버 환경 구축 (Supabase: ggotAIhp 프로젝트 ACTIVE)
-    - `[x]` `member_info`, `server_call_history` 테이블 생성
+    - `[x]` `member_info`, `server_call_history` 테이블 생성 (※ 5단계에서 신규 스키마로 개편됨)
   - `[ ]` [Common] API 인터페이스 최종 확정 (Mock 데이터 교환 테스트)
 
 - `[/]` 2단계: 핵심 기능 병렬 개발
@@ -42,3 +42,17 @@
   - `[x]` 프론트엔드-백엔드 간 실제 데이터 연동 테스트 (완료)
   - `[x]` 통화 녹음 파일(삼성 기본 녹음) 스캔 및 서버 전송 안정성 검증 (완료)
   - `[ ]` 사장님 실제 기기 및 실무 환경에서의 장기 안정성 필드 테스트 (내일 진행 예정)
+
+- `[x]` 5단계: DB 구조 전면 개편 반영 (2026-06-10, 설계 출처: `ggotAIhp.pptx`)
+  - `[x]` [Back] 라이브 DB 점검 및 신규 스키마 확인 (3-클라이언트 구조: ggotAIhp/ggotAIorder/ggotAIya)
+    - `[x]` `member_info`: `mobile_1~5` → 단일 `mobile_number`, `username`/`password`/`address_detail` 추가
+    - `[x]` `server_call_history`: 연결키 `user_phone_number` → `shop_key`(FK member_info.id), `phone_number` → `customer_phone_number`, `channel_order`/`channel_classification` 신설
+    - `[x]` 신규 테이블 확인: `order_details`, `setting_info`, `phone_verification` (앱은 order_details/phone_verification 미사용)
+  - `[x]` [Back] Edge Function 신규 스키마 정합 수정 및 배포
+    - `[x]` `verify-device`: `mobile_number` 조회로 변경, 응답에 `shop_key` 추가
+    - `[x]` `upload-call`: `mobile_number`→`shop_key` 식별 후 `channel_order='핸드폰'`/`channel_classification=기기번호`/`customer_phone_number`로 적재 (중복체크·롤백도 `shop_key` 기준)
+    - `[x]` `delete-call`: `mobile_number` 조회 + `shop_key` 기준 삭제
+    - `[x]` init 마이그레이션을 신규 5개 테이블 스키마로 재작성
+    - `[x]` 3개 함수 배포 후 시드꽃집(id=8)으로 verify→upload→delete 전 과정 검증 완료
+  - `[x]` [Front] Android 앱 호환성 확인 — 함수가 `mobile_number→shop_key` 내부 변환하여 **앱 무수정 호환**
+  - `[ ]` [Back] (선택) `setting_info` 읽기 연동 — 명세상 ggotAIhp R 권한 (알림 설정 등), 추후 필요 시

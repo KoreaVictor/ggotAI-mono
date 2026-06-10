@@ -14,17 +14,24 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.work.Constraints
+import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.PeriodicWorkRequestBuilder
+import androidx.work.WorkManager
 import com.ggotai.hp.api.DeleteCallRequest
 import com.ggotai.hp.api.RetrofitClient
 import com.ggotai.hp.databinding.ActivityMainBinding
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
+import com.ggotai.hp.worker.ResendWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Locale
+import java.util.concurrent.TimeUnit
 
 class MainActivity : AppCompatActivity() {
 
@@ -70,6 +77,23 @@ class MainActivity : AppCompatActivity() {
 
         // 서버 환경설정(알림 동작 등)을 가져와 로컬에 캐시. 실패해도 앱 동작은 막지 않음.
         fetchAndCacheSettings()
+
+        // 업로드 실패 건 15분 주기 자동 재전송 워커 등록 (중복 등록 방지)
+        scheduleAutoResend()
+    }
+
+    private fun scheduleAutoResend() {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = PeriodicWorkRequestBuilder<ResendWorker>(15, TimeUnit.MINUTES)
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(applicationContext).enqueueUniquePeriodicWork(
+            ResendWorker.UNIQUE_NAME,
+            ExistingPeriodicWorkPolicy.KEEP,
+            request
+        )
     }
 
     private fun fetchAndCacheSettings() {

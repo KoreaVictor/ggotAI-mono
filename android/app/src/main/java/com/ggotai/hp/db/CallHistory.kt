@@ -18,5 +18,6 @@ data class CallHistory(
     @ColumnInfo(name = "duration_seconds") val durationSeconds: Int? = null,
     @ColumnInfo(name = "error_code") var errorCode: String? = null,
     @ColumnInfo(name = "error_message") var errorMessage: String? = null,
-    @ColumnInfo(name = "sync_status") var syncStatus: Int = 0
+    @ColumnInfo(name = "sync_status") var syncStatus: Int = 0,
+    @ColumnInfo(name = "retry_count") var retryCount: Int = 0
 )

@@ -39,13 +39,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 기기 인증 검증
+    // 기기 인증 검증 (대표 핸드폰 번호로 가맹점 식별)
     const { data: member, error: memberError } = await supabase
       .from("member_info")
-      .select("shop_name, is_approved")
-      .or(
-        `mobile_1.eq.${userPhoneNumber},mobile_2.eq.${userPhoneNumber},mobile_3.eq.${userPhoneNumber},mobile_4.eq.${userPhoneNumber},mobile_5.eq.${userPhoneNumber}`
-      )
+      .select("id, shop_name, is_approved")
+      .eq("mobile_number", userPhoneNumber)
       .maybeSingle();
 
     if (memberError || !member || member.is_approved !== "Y") {
@@ -71,8 +69,8 @@ Deno.serve(async (req: Request) => {
     const { data: existingCall, error: checkError } = await supabase
       .from("server_call_history")
       .select("id")
-      .eq("user_phone_number", userPhoneNumber)
-      .eq("phone_number", phoneNumber)
+      .eq("shop_key", member.id)
+      .eq("customer_phone_number", phoneNumber)
       .eq("call_date", callDate)
       .eq("call_time", callTime)
       .maybeSingle();
@@ -90,10 +88,13 @@ Deno.serve(async (req: Request) => {
     }
 
     // 1단계: DB 먼저 적재 (Storage 업로드 전에 실행하여 고아 파일 방지)
+    // 핸드폰 통화녹음 채널: channel_order='핸드폰', channel_classification=기기(가맹점) 핸드폰 번호
     const { error: dbError } = await supabase.from("server_call_history").insert({
-      user_phone_number: userPhoneNumber,
+      channel_order: "핸드폰",
+      channel_classification: userPhoneNumber,
+      shop_key: member.id,
       shop_name: member.shop_name,
-      phone_number: phoneNumber,
+      customer_phone_number: phoneNumber,
       customer_name: customerName,
       call_date: callDate,
       call_time: callTime,
@@ -129,7 +130,7 @@ Deno.serve(async (req: Request) => {
         .from("server_call_history")
         .delete()
         .eq("audio_file_name", fileName)
-        .eq("user_phone_number", userPhoneNumber);
+        .eq("shop_key", member.id);
       return new Response(
         JSON.stringify({
           status: "error",

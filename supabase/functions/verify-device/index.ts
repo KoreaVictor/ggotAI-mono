@@ -33,10 +33,8 @@ Deno.serve(async (req: Request) => {
 
     const { data, error } = await supabase
       .from("member_info")
-      .select("shop_name, representative_name, is_approved")
-      .or(
-        `mobile_1.eq.${phone},mobile_2.eq.${phone},mobile_3.eq.${phone},mobile_4.eq.${phone},mobile_5.eq.${phone}`
-      )
+      .select("id, shop_name, representative_name, is_approved")
+      .eq("mobile_number", phone)
       .maybeSingle();
 
     if (error || !data || data.is_approved !== "Y") {
@@ -54,6 +52,7 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         status: "success",
         data: {
+          shop_key: data.id,
           shop_name: data.shop_name,
           representative_name: data.representative_name,
           is_approved: data.is_approved,

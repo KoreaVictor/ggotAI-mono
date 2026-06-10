@@ -30,13 +30,11 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1단계: 기기 인증 및 승인 여부 검증
+    // 1단계: 기기 인증 및 승인 여부 검증 (대표 핸드폰 번호로 가맹점 식별)
     const { data: member, error: memberError } = await supabase
       .from("member_info")
-      .select("shop_name, is_approved")
-      .or(
-        `mobile_1.eq.${userPhoneNumber},mobile_2.eq.${userPhoneNumber},mobile_3.eq.${userPhoneNumber},mobile_4.eq.${userPhoneNumber},mobile_5.eq.${userPhoneNumber}`
-      )
+      .select("id, shop_name, is_approved")
+      .eq("mobile_number", userPhoneNumber)
       .maybeSingle();
 
     if (memberError || !member || member.is_approved !== "Y") {
@@ -57,7 +55,7 @@ Deno.serve(async (req: Request) => {
       .from("server_call_history")
       .delete({ count: "exact" })
       .eq("audio_file_name", audioFileName)
-      .eq("user_phone_number", userPhoneNumber);
+      .eq("shop_key", member.id);
 
     console.log(`[Delete] DB 삭제 결과 - error: ${JSON.stringify(dbError)}, 삭제된 행 개수: ${count}`);
 

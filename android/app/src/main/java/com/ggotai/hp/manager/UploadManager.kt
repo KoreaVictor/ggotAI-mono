@@ -3,9 +3,16 @@ package com.ggotai.hp.manager
 import android.content.Context
 import android.speech.tts.TextToSpeech
 import android.util.Log
+import androidx.work.Constraints
+import androidx.work.ExistingWorkPolicy
+import androidx.work.NetworkType
+import androidx.work.OneTimeWorkRequestBuilder
+import androidx.work.WorkManager
 import com.ggotai.hp.api.RetrofitClient
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
+import com.ggotai.hp.util.NetworkUtil
+import com.ggotai.hp.worker.ResendWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withContext
@@ -54,6 +61,15 @@ object UploadManager {
                 return@withContext
             }
 
+            // 통화 직후 네트워크 미복구(예: VoLTE 직후 IMS 망만 살아있는 순간)면
+            // 헛된 '실패' 음성 없이 자동 재전송에 위임하고, 망 복구 즉시 올라가도록 예약한다.
+            if (!NetworkUtil.isOnline(context)) {
+                markFailed(dao, history, "OFFLINE", "네트워크 연결 시 자동 전송됩니다.")
+                enqueueResendOnReconnect(context)
+                Log.d(TAG, "오프라인 — 즉시 업로드 보류, 네트워크 복구 시 자동 전송 예약 id=$historyId")
+                return@withContext
+            }
+
             var attempt = 0
             var success = false
             while (attempt < MAX_RETRIES && !success) {
@@ -74,7 +90,14 @@ object UploadManager {
                         fresh.errorMessage ?: "알 수 없는 오류"
                     )
                 }
-                playTtsError(context)
+                // 시도 도중 네트워크가 끊겼을 수 있다 → 온라인일 때만 '실패' 음성,
+                // 오프라인이면 음성 없이 자동 재전송 예약(헛된 알림 방지).
+                if (NetworkUtil.isOnline(context)) {
+                    playTtsError(context)
+                } else {
+                    enqueueResendOnReconnect(context)
+                    Log.d(TAG, "업로드 실패 후 오프라인 — 음성 생략, 자동 전송 예약 id=$historyId")
+                }
             }
         }
     }
@@ -154,5 +177,23 @@ object UploadManager {
 
     fun speak(message: String) {
         tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "UploadMessage")
+    }
+
+    /**
+     * 네트워크 복구 즉시 1회 재전송을 수행하도록 CONNECTED 제약의 일회성 ResendWorker를 예약한다.
+     * 주기(15분) 워커보다 빠르게 올리기 위함. 이미 예약돼 있으면 유지(KEEP)한다.
+     */
+    private fun enqueueResendOnReconnect(context: Context) {
+        val constraints = Constraints.Builder()
+            .setRequiredNetworkType(NetworkType.CONNECTED)
+            .build()
+        val request = OneTimeWorkRequestBuilder<ResendWorker>()
+            .setConstraints(constraints)
+            .build()
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            "resend-on-reconnect",
+            ExistingWorkPolicy.KEEP,
+            request
+        )
     }
 }

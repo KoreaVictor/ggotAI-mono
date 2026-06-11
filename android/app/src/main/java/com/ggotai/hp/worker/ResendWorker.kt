@@ -9,6 +9,8 @@ import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.manager.UploadManager
 import com.ggotai.hp.policy.ResendPolicy
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
 
@@ -24,13 +26,21 @@ class ResendWorker(
     companion object {
         private const val TAG = "ResendWorker"
         const val UNIQUE_NAME = "auto-resend"
+
+        // 주기 워커와 재연결 일회성 워커가 동시에 떠도 같은 건을 중복 업로드하지 않도록
+        // 프로세스 내 재전송을 직렬화한다. (서버 중복방지는 비원자적 pre-check라 경쟁에 취약)
+        private val resendMutex = Mutex()
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
+        resendMutex.withLock { resend() }
+    }
+
+    private suspend fun resend(): Result {
         val prefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("AUTO_SYNC_ENABLED", true)) {
             Log.d(TAG, "자동 연동 OFF — 재전송 워커 건너뜀")
-            return@withContext Result.success()
+            return Result.success()
         }
 
         val dao = AppDatabase.getDatabase(applicationContext).callHistoryDao()
@@ -67,6 +77,6 @@ class ResendWorker(
         if (changed) {
             applicationContext.sendBroadcast(Intent("com.ggotai.hp.ACTION_UPDATE_HISTORY"))
         }
-        Result.success()
+        return Result.success()
     }
 }

@@ -93,3 +93,9 @@
   - `[x]` `CustomerResolver`(번호/이름 결정 순수함수) — JVM 단위테스트 5건 통과
   - `[x]` `CallLogEntry`/`CallLogReader`(최근 10분 이내 통화, `READ_CALL_LOG` 방어적 확인) 추가, `CallReceiver` 예약 단순화
   - `[x]` **실기기 E2E 검증**: 저장 연락처와 실통화 → 로컬 `call_history` `phone_number=01049534339`/`customer_name=여현동`, 서버 `server_call_history`(shop_key=19) 신규 행 `id=110` 동일 적재 + 오디오 Storage 업로드(545KB) 확인 (기존 `Unknown`/`신규` 버그 해결)
+
+- `[x]` **8단계: 통화 직후 오프라인 시 헛된 '전송 실패' 음성 제거** (2026-06-11)
+  - `[x]` `NetworkUtil.isOnline`(검증된 INTERNET 네트워크 판단) 추가, `ACCESS_NETWORK_STATE` 권한 추가
+  - `[x]` `UploadManager`: 통화 직후(VoLTE 직후 IMS-only 순간 등) 오프라인이면 즉시 업로드 보류 → **실패 음성 미발생**, `errorCode=OFFLINE`로 재전송 대상 유지 + 망 복구 즉시 일회성 CONNECTED ResendWorker 예약. 업로드 시도 후 실패도 오프라인이면 음성 생략.
+  - `[x]` `ResendWorker`: 일회성(재연결)·주기 워커 동시 실행 시 중복 업로드 방지 위해 프로세스 Mutex로 직렬화 (서버 중복방지가 비원자적 pre-check라 경쟁에 취약)
+  - `[x]` **실기기 E2E 검증**: WiFi+데이터 OFF 상태 실통화 → 캡처 정상·음성 미발생·보류(`id=107`), 재연결+앱진입 시 자동 업로드 성공, 서버 신규 행 **1건만**(`id=115`, 중복 없음) 확인

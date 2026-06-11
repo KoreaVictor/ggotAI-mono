@@ -87,3 +87,9 @@
   - `[x]` `CallHistoryDao.getRetryable` (미전송·실패·상한미달 필터) — 인메모리 계측테스트 통과
   - `[x]` `UploadManager.uploadOnce` 추출 + `ResendWorker`(15분 주기 / `NetworkType.CONNECTED` / `KEEP`) + `MainActivity` 등록 + `ResendActivity` 수동 재전송 리셋
   - `[x]` **실기기 E2E 검증**: 기존 실패 82건 자동 재전송 → 전부 `sync_status=1`, 서버 `server_call_history`(shop_key=19) 적재 확인, `Worker result SUCCESS`
+
+- `[x]` **7단계: 고객 번호·이름 수집 수정 (CallLog)** (2026-06-11, 설계: `docs/superpowers/specs/2026-06-10-customer-number-capture-design.md`, 계획: `docs/superpowers/plans/2026-06-10-customer-number-capture.md`)
+  - `[x]` 막다른 길 `EXTRA_INCOMING_NUMBER`(Android 10+ 일반앱 null) 의존 제거 → `CallSyncWorker`가 `CallLogReader`로 최근 통화 조회
+  - `[x]` `CustomerResolver`(번호/이름 결정 순수함수) — JVM 단위테스트 5건 통과
+  - `[x]` `CallLogEntry`/`CallLogReader`(최근 10분 이내 통화, `READ_CALL_LOG` 방어적 확인) 추가, `CallReceiver` 예약 단순화
+  - `[x]` **실기기 E2E 검증**: 저장 연락처와 실통화 → 로컬 `call_history` `phone_number=01049534339`/`customer_name=여현동`, 서버 `server_call_history`(shop_key=19) 신규 행 `id=110` 동일 적재 + 오디오 Storage 업로드(545KB) 확인 (기존 `Unknown`/`신규` 버그 해결)

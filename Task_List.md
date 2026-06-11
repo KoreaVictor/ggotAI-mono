@@ -104,3 +104,8 @@
   - `[x]` `server_call_history`에 부분 UNIQUE 인덱스 `uq_server_call_history_call` 추가 — `(shop_key, customer_phone_number, call_date, call_time) NULLS NOT DISTINCT WHERE audio_file_name IS NOT NULL` (마이그레이션 `20260611000000_server_call_unique_index.sql`). 시드 더미(audio 없는 행) 비파괴 제외
   - `[x]` `upload-call`: 비원자적 pre-check를 통과한 동시 요청이 UNIQUE 위반(23505) 시 멱등 성공 처리하도록 보강 후 재배포(v4, verify_jwt 유지)
   - `[x]` **검증**: 원시 중복 INSERT → 23505 거부 확인 · 함수 정상 업로드(200) · 동일/동시 요청에도 tuple당 서버 행 1건만 생성 확인 (테스트 데이터·스토리지 정리 완료)
+
+- `[x]` **10단계: CallSyncWorker 오디오 길이 추출 타임아웃 가드** (2026-06-11)
+  - `[x]` 배경: 실기기 검증 중 `MediaMetadataRetriever`가 일시적 스토리지 I/O 스톨로 워커를 수 분간 블록(D상태)하는 현상 관찰(기존 재시도 루프는 "반환"을 전제라 hang은 못 막음). 자동 복구는 됐으나 통화 직후 업로드가 지연.
+  - `[x]` `getAudioDuration`을 단일 스레드 Executor + `Future.get(10s)` 패턴으로 변경 — 추출이 시간 내 안 끝나면 0초로 진행해 통화 저장·업로드를 지연 없이 계속(멈춘 네이티브 스레드는 스톨 해소/프로세스 종료 시 정리). 정상 경로는 별도 스레드에서 동일 동작.
+  - `[x]` **실기기 E2E 검증**: 정상 통화 → 길이 추출(17초, 별도 스레드) 정상·`DB 저장 id=113`·업로드 성공, 서버 `id=125` 동일 적재(무회귀)

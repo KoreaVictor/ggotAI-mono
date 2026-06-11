@@ -17,6 +17,10 @@ import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.concurrent.Callable
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
+import java.util.concurrent.TimeoutException
 
 class CallSyncWorker(
     private val context: Context,
@@ -25,6 +29,8 @@ class CallSyncWorker(
 
     companion object {
         private const val TAG = "CallSyncWorker"
+        // 오디오 길이 추출(MediaMetadataRetriever) 최대 대기. 스토리지 스톨 시 무한 블록 방지.
+        private const val DURATION_EXTRACT_TIMEOUT_MS = 10_000L
     }
 
     override suspend fun doWork(): Result = withContext(Dispatchers.IO) {
@@ -185,7 +191,31 @@ class CallSyncWorker(
         return contactName
     }
 
+    /**
+     * 오디오 길이를 추출한다. MediaMetadataRetriever 네이티브 호출이 스토리지 I/O 스톨 등으로
+     * 무한정 멈출 수 있으므로, 단일 스레드 Executor에서 실행하고 [DURATION_EXTRACT_TIMEOUT_MS] 타임아웃을 둔다.
+     * 시간 내 못 구하면 0초로 진행한다(통화 기록 저장·업로드는 지연 없이 계속).
+     * 주의: 네이티브 호출 자체는 강제 중단되지 않으며, 멈춘 추출 스레드는 스톨 해소/프로세스 종료 시 정리된다.
+     */
     private fun getAudioDuration(filePath: String): Int {
+        val executor = Executors.newSingleThreadExecutor()
+        val future = executor.submit(Callable { extractAudioDurationBlocking(filePath) })
+        return try {
+            future.get(DURATION_EXTRACT_TIMEOUT_MS, TimeUnit.MILLISECONDS)
+        } catch (e: TimeoutException) {
+            future.cancel(true)
+            Log.e(TAG, "오디오 길이 추출 타임아웃(${DURATION_EXTRACT_TIMEOUT_MS}ms) — 0초로 진행: $filePath")
+            0
+        } catch (e: Exception) {
+            Log.e(TAG, "오디오 길이 추출 중 오류 — 0초로 진행: $filePath", e)
+            0
+        } finally {
+            // 블록된 네이티브 스레드는 즉시 죽지 않지만, 더는 새 작업을 받지 않도록 종료 신호를 보낸다.
+            executor.shutdownNow()
+        }
+    }
+
+    private fun extractAudioDurationBlocking(filePath: String): Int {
         var duration = 0
         var attempts = 0
         val maxAttempts = 3

@@ -103,6 +103,15 @@ Deno.serve(async (req: Request) => {
     });
 
     if (dbError) {
+      // 동시 업로드 경쟁: pre-check 이후 다른 요청이 먼저 적재(UNIQUE 위반 23505)
+      // → 멱등 성공으로 처리한다. (pre-check는 비원자적이라 경쟁을 못 막으므로 제약이 최종 방어선)
+      if (dbError.code === "23505") {
+        console.log(`[Idempotency] Unique violation for ${fileName}. Concurrent upload detected; returning success.`);
+        return new Response(
+          JSON.stringify({ status: "success", message: "이미 업로드 완료된 건입니다. (동시성 보장)" }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       console.error("DB insert error:", JSON.stringify(dbError));
       return new Response(
         JSON.stringify({

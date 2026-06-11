@@ -99,3 +99,8 @@
   - `[x]` `UploadManager`: 통화 직후(VoLTE 직후 IMS-only 순간 등) 오프라인이면 즉시 업로드 보류 → **실패 음성 미발생**, `errorCode=OFFLINE`로 재전송 대상 유지 + 망 복구 즉시 일회성 CONNECTED ResendWorker 예약. 업로드 시도 후 실패도 오프라인이면 음성 생략.
   - `[x]` `ResendWorker`: 일회성(재연결)·주기 워커 동시 실행 시 중복 업로드 방지 위해 프로세스 Mutex로 직렬화 (서버 중복방지가 비원자적 pre-check라 경쟁에 취약)
   - `[x]` **실기기 E2E 검증**: WiFi+데이터 OFF 상태 실통화 → 캡처 정상·음성 미발생·보류(`id=107`), 재연결+앱진입 시 자동 업로드 성공, 서버 신규 행 **1건만**(`id=115`, 중복 없음) 확인
+
+- `[x]` **9단계: 서버 중복 적재 원천 차단 (UNIQUE 인덱스)** (2026-06-11)
+  - `[x]` `server_call_history`에 부분 UNIQUE 인덱스 `uq_server_call_history_call` 추가 — `(shop_key, customer_phone_number, call_date, call_time) NULLS NOT DISTINCT WHERE audio_file_name IS NOT NULL` (마이그레이션 `20260611000000_server_call_unique_index.sql`). 시드 더미(audio 없는 행) 비파괴 제외
+  - `[x]` `upload-call`: 비원자적 pre-check를 통과한 동시 요청이 UNIQUE 위반(23505) 시 멱등 성공 처리하도록 보강 후 재배포(v4, verify_jwt 유지)
+  - `[x]` **검증**: 원시 중복 INSERT → 23505 거부 확인 · 함수 정상 업로드(200) · 동일/동시 요청에도 tuple당 서버 행 1건만 생성 확인 (테스트 데이터·스토리지 정리 완료)

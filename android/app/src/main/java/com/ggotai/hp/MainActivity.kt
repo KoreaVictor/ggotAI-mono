@@ -94,19 +94,33 @@ class MainActivity : AppCompatActivity() {
         // 업로드 실패 건 15분 주기 자동 재전송 워커 등록 (중복 등록 방지)
         scheduleAutoResend()
 
-        // 백그라운드 통화 수집·전송 안정성을 위해 배터리 최적화 제외 안내 (미제외 시에만)
-        promptDisableBatteryOptimizationIfNeeded()
+        // 설정 안내(배터리 최적화 제외 → 통화 녹음)를 순차로 노출
+        showStartupGuidesIfNeeded()
     }
 
     /**
-     * 배터리 최적화에서 제외돼 있지 않으면 안내 다이얼로그를 띄운다.
-     * 이미 제외 상태면 아무것도 하지 않으므로 반복 노출되지 않는다.
+     * 시작 시 설정 안내를 노출한다. 배터리 최적화 안내가 뜨면 닫힌 뒤 통화 녹음 안내를 잇고,
+     * 안 뜨면 곧장 통화 녹음 안내를 확인한다(다이얼로그 중첩 방지).
      */
-    private fun promptDisableBatteryOptimizationIfNeeded() {
-        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
-        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+    private fun showStartupGuidesIfNeeded() {
+        val batteryDialog = buildBatteryOptimizationDialogIfNeeded()
+        if (batteryDialog != null) {
+            batteryDialog.setOnDismissListener { checkCallRecordingAndPrompt() }
+            batteryDialog.show()
+        } else {
+            checkCallRecordingAndPrompt()
+        }
+    }
 
-        AlertDialog.Builder(this)
+    /**
+     * 배터리 최적화에서 제외돼 있지 않으면 안내 다이얼로그(미표시 상태)를 만들어 반환, 제외 상태면 null.
+     * 이미 제외면 노출하지 않으므로 반복되지 않는다.
+     */
+    private fun buildBatteryOptimizationDialogIfNeeded(): AlertDialog? {
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return null
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return null
+
+        return AlertDialog.Builder(this)
             .setTitle("배터리 최적화 제외 권장")
             .setMessage(
                 "안정적인 통화 자동 수집·전송을 위해 배터리 최적화에서 이 앱을 제외해 주세요.\n" +
@@ -114,7 +128,60 @@ class MainActivity : AppCompatActivity() {
             )
             .setPositiveButton("설정 열기") { _, _ -> openBatteryOptimizationSetting() }
             .setNegativeButton("나중에", null)
+            .create()
+    }
+
+    /**
+     * 통화 자동 녹음 안내. 삼성 녹음 ON/OFF는 공개 API로 조회 불가하므로 다음 두 경우에 노출한다.
+     *  - 최근 통화에 녹음 파일이 없음(녹음 OFF 강한 신호) → 매번 경고(녹음되면 자동으로 멈춤)
+     *  - 통화 기록이 아직 없고 첫 실행이면 1회 정보 안내
+     */
+    private fun checkCallRecordingAndPrompt() {
+        lifecycleScope.launch {
+            val latest = withContext(Dispatchers.IO) {
+                AppDatabase.getDatabase(applicationContext).callHistoryDao().getAll().firstOrNull()
+            }
+            val prefs = getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+            when {
+                latest != null && (latest.audioFileName.isBlank() || latest.audioFilePath.isBlank()) -> {
+                    showCallRecordingDialog(
+                        "최근 통화의 녹음 파일이 없습니다.\n" +
+                            "전화 앱의 '통화 자동 녹음'이 꺼져 있는지 확인해 주세요. 꺼져 있으면 음성이 서버로 전송되지 않습니다."
+                    )
+                }
+                latest == null && !prefs.getBoolean("recording_notice_shown", false) -> {
+                    prefs.edit().putBoolean("recording_notice_shown", true).apply()
+                    showCallRecordingDialog(
+                        "이 앱은 휴대폰의 '통화 자동 녹음'으로 생성된 녹음을 전송합니다.\n" +
+                            "전화 앱 설정에서 '통화 자동 녹음'을 켜 주세요."
+                    )
+                }
+            }
+        }
+    }
+
+    private fun showCallRecordingDialog(message: String) {
+        AlertDialog.Builder(this)
+            .setTitle("통화 자동 녹음 확인")
+            .setMessage(message)
+            .setPositiveButton("전화 설정 열기") { _, _ -> openCallSettings() }
+            .setNegativeButton("확인", null)
             .show()
+    }
+
+    /** 전화 앱의 통화 설정 화면을 연다(거기서 '통화 자동 녹음' 설정). 미지원 시 안내 토스트. */
+    private fun openCallSettings() {
+        try {
+            startActivity(Intent("android.telecom.action.SHOW_CALL_SETTINGS"))
+        } catch (e: Exception) {
+            Log.e("MainActivity", "통화 설정 화면 열기 실패", e)
+            Toast.makeText(
+                this,
+                "전화 앱 → 설정 → '통화 녹음'에서 '통화 자동 녹음'을 켜 주세요.",
+                Toast.LENGTH_LONG
+            ).show()
+        }
     }
 
     /** 배터리 최적화 제외 요청 시스템 다이얼로그를 연다. 미지원 기기면 최적화 설정 목록으로 대체. */

@@ -119,3 +119,8 @@
   - `[x]` `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 권한 추가
   - `[x]` `MainActivity` 진입 시 `PowerManager.isIgnoringBatteryOptimizations`로 미제외면 안내 다이얼로그 → [설정 열기]는 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 시스템 화면 호출(미지원 시 최적화 목록으로 폴백). 이미 제외면 미표시(반복 안내 없음)
   - `[x]` **실기기 E2E 검증(adb UI 자동화)**: 미제외 시 안내 다이얼로그 표시 확인 · "설정 열기" → 시스템 `RequestIgnoreBatteryOptimizations` 호출(logcat) 확인 · 화이트리스트 등록 시 다이얼로그 미표시 확인
+
+- `[x]` **13단계: 통화 자동 녹음 안내** (2026-06-11)
+  - `[x]` 제약: 삼성 '통화 자동 녹음' ON/OFF는 공개 API로 조회 불가 → **증거 기반** 설계. 최근 통화에 녹음 파일이 없으면(`audioFileName`/`audioFilePath` 공백) 경고 노출, 통화 기록이 없는 첫 실행이면 1회 정보 안내
+  - `[x]` [전화 설정 열기] → `ACTION_SHOW_CALL_SETTINGS`(삼성 통화설정 화면) 호출, 미지원 시 안내 토스트. 배터리 안내와 순차 표시(다이얼로그 중첩 방지)
+  - `[x]` **실기기 E2E 검증(adb UI 자동화)**: 배터리 안내→닫기→녹음 안내 순차·무크래시, 최신통화에 녹음 있을 때 미표시(오탐 없음), `ACTION_SHOW_CALL_SETTINGS`가 `SamsungCallSettingsActivity`로 해석 확인

@@ -41,6 +41,18 @@
                     android:background="?selectableItemBackgroundBorderless"
                     android:clickable="true"
                     android:focusable="true"/>
+
+                <ImageView
+                    android:id="@+id/btnExit"
+                    android:layout_width="24dp"
+                    android:layout_height="24dp"
+                    android:layout_marginStart="20dp"
+                    android:src="@android:drawable/ic_lock_power_off"
+                    android:contentDescription="완전 종료"
+                    android:tint="@color/text_secondary"
+                    android:background="?selectableItemBackgroundBorderless"
+                    android:clickable="true"
+                    android:focusable="true"/>
             </LinearLayout>
 
             <!-- 2. 브랜드 슬로건 영역 (설정 아이콘 바로 왼쪽에 밀착 정렬) -->

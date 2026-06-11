@@ -2,9 +2,11 @@ package com.ggotai.hp
 
 import android.app.DatePickerDialog
 import android.content.BroadcastReceiver
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.pm.PackageManager
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -24,6 +26,7 @@ import com.ggotai.hp.api.RetrofitClient
 import com.ggotai.hp.databinding.ActivityMainBinding
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
+import com.ggotai.hp.receiver.CallReceiver
 import com.ggotai.hp.worker.ResendWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -53,6 +56,9 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // 완전 종료 후 재실행 시 통화 감지 수신기를 항상 복구(멱등). 종료하지 않았다면 무해한 no-op.
+        setCallReceiverEnabled(true)
+
         val shopName = intent.getStringExtra("SHOP_NAME") ?: "서울플라워"
         binding.tvShopName.text = shopName
 
@@ -71,6 +77,10 @@ class MainActivity : AppCompatActivity() {
         
         binding.btnSettings.setOnClickListener {
             startActivity(Intent(this, SettingsActivity::class.java))
+        }
+
+        binding.btnExit.setOnClickListener {
+            confirmFullExit()
         }
 
         setupRecyclerView()
@@ -93,6 +103,56 @@ class MainActivity : AppCompatActivity() {
             ResendWorker.UNIQUE_NAME,
             ExistingPeriodicWorkPolicy.KEEP,
             request
+        )
+    }
+
+    /** 완전 종료 확인 다이얼로그. 자동 수집 중단 영향을 명확히 고지한다. */
+    private fun confirmFullExit() {
+        AlertDialog.Builder(this)
+            .setTitle("완전 종료")
+            .setMessage(
+                "완전 종료하면 통화 자동 감지와 자동 전송이 모두 멈춥니다.\n" +
+                    "앱을 다시 실행하기 전까지 통화 기록이 수집되지 않습니다.\n\n" +
+                    "종료하시겠습니까?"
+            )
+            .setPositiveButton("완전 종료") { _, _ -> performFullExit() }
+            .setNegativeButton("취소", null)
+            .show()
+    }
+
+    /**
+     * 완전 종료: 통화 감지 수신기 비활성화 + 모든 WorkManager 작업 취소 후 앱 종료.
+     * 재실행 시 onCreate에서 수신기 재활성화 + 주기 워커 재등록으로 복구된다.
+     */
+    private fun performFullExit() {
+        // 1) 통화 감지 즉시 중단 (매니페스트 수신기 컴포넌트 비활성화 — 동기·영속)
+        setCallReceiverEnabled(false)
+
+        // 2) 재전송/동기화 워커 취소 (취소가 영속화될 때까지 대기 후 종료)
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) {
+                try {
+                    WorkManager.getInstance(applicationContext).cancelAllWork().result.get()
+                } catch (e: Exception) {
+                    Log.e("MainActivity", "WorkManager 취소 실패", e)
+                }
+            }
+            // 3) 액티비티 종료 + 최근앱 목록에서 제거
+            finishAndRemoveTask()
+        }
+    }
+
+    /** 통화 감지 수신기(CallReceiver) 컴포넌트 활성/비활성. 완전 종료/복구에 사용. */
+    private fun setCallReceiverEnabled(enabled: Boolean) {
+        val state = if (enabled) {
+            PackageManager.COMPONENT_ENABLED_STATE_ENABLED
+        } else {
+            PackageManager.COMPONENT_ENABLED_STATE_DISABLED
+        }
+        packageManager.setComponentEnabledSetting(
+            ComponentName(this, CallReceiver::class.java),
+            state,
+            PackageManager.DONT_KILL_APP
         )
     }
 

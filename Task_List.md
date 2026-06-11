@@ -114,3 +114,8 @@
   - `[x]` 메인 툴바에 종료 아이콘(`btnExit`) 추가 + 영향 고지 확인 다이얼로그
   - `[x]` 완전 종료: `CallReceiver`(매니페스트 수신기) 컴포넌트 비활성화 + WorkManager 전체 취소(영속화 대기) + `finishAndRemoveTask`. 재실행 시 `onCreate`에서 수신기 재활성화 + 주기 워커 재등록으로 복구
   - `[x]` **실기기 E2E 검증(adb UI 자동화)**: 종료 → `disabledComponents`에 CallReceiver·런처 복귀 확인 / 재실행 → 수신기 재활성화·주기 워커(잡 #34) 재등록 확인
+
+- `[x]` **12단계: 배터리 최적화 제외 안내** (2026-06-11)
+  - `[x]` `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 권한 추가
+  - `[x]` `MainActivity` 진입 시 `PowerManager.isIgnoringBatteryOptimizations`로 미제외면 안내 다이얼로그 → [설정 열기]는 `ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS` 시스템 화면 호출(미지원 시 최적화 목록으로 폴백). 이미 제외면 미표시(반복 안내 없음)
+  - `[x]` **실기기 E2E 검증(adb UI 자동화)**: 미제외 시 안내 다이얼로그 표시 확인 · "설정 열기" → 시스템 `RequestIgnoreBatteryOptimizations` 호출(logcat) 확인 · 화이트리스트 등록 시 다이얼로그 미표시 확인

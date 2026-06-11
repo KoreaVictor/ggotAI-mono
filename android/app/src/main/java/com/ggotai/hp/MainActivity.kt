@@ -7,8 +7,11 @@ import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.PowerManager
+import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
@@ -90,6 +93,47 @@ class MainActivity : AppCompatActivity() {
 
         // 업로드 실패 건 15분 주기 자동 재전송 워커 등록 (중복 등록 방지)
         scheduleAutoResend()
+
+        // 백그라운드 통화 수집·전송 안정성을 위해 배터리 최적화 제외 안내 (미제외 시에만)
+        promptDisableBatteryOptimizationIfNeeded()
+    }
+
+    /**
+     * 배터리 최적화에서 제외돼 있지 않으면 안내 다이얼로그를 띄운다.
+     * 이미 제외 상태면 아무것도 하지 않으므로 반복 노출되지 않는다.
+     */
+    private fun promptDisableBatteryOptimizationIfNeeded() {
+        val pm = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return
+        if (pm.isIgnoringBatteryOptimizations(packageName)) return
+
+        AlertDialog.Builder(this)
+            .setTitle("배터리 최적화 제외 권장")
+            .setMessage(
+                "안정적인 통화 자동 수집·전송을 위해 배터리 최적화에서 이 앱을 제외해 주세요.\n" +
+                    "제외하지 않으면 화면이 꺼져 있을 때 전송이 지연될 수 있습니다."
+            )
+            .setPositiveButton("설정 열기") { _, _ -> openBatteryOptimizationSetting() }
+            .setNegativeButton("나중에", null)
+            .show()
+    }
+
+    /** 배터리 최적화 제외 요청 시스템 다이얼로그를 연다. 미지원 기기면 최적화 설정 목록으로 대체. */
+    private fun openBatteryOptimizationSetting() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS).apply {
+                    data = Uri.parse("package:$packageName")
+                }
+            )
+        } catch (e: Exception) {
+            Log.e("MainActivity", "배터리 최적화 요청 화면 실패, 목록으로 대체", e)
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (e2: Exception) {
+                Log.e("MainActivity", "배터리 최적화 설정 화면도 실패", e2)
+                Toast.makeText(this, "설정 > 배터리에서 최적화 제외를 직접 설정해 주세요.", Toast.LENGTH_LONG).show()
+            }
+        }
     }
 
     private fun scheduleAutoResend() {

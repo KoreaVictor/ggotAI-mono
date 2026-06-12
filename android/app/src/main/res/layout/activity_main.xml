@@ -115,8 +115,8 @@
 
                 <View
                     android:id="@+id/indicatorServer"
-                    android:layout_width="10dp"
-                    android:layout_height="10dp"
+                    android:layout_width="14dp"
+                    android:layout_height="14dp"
                     android:background="@drawable/circle_green"
                     android:layout_marginStart="8dp"
                     app:layout_constraintStart_toEndOf="@id/tvShopName"

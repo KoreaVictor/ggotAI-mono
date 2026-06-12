@@ -75,6 +75,10 @@ object UploadManager {
             while (attempt < MAX_RETRIES && !success) {
                 success = uploadOnce(context, historyId)
                 if (!success) {
+                    if (DeviceStatus.isRevoked(context)) {
+                        Log.d(TAG, "승인취소 감지 — 재시도 중단 id=$historyId")
+                        break  // 401은 재시도해도 동일 → 무의미
+                    }
                     attempt++
                     if (attempt < MAX_RETRIES) delay(RETRY_DELAY_MS)
                 }
@@ -90,13 +94,16 @@ object UploadManager {
                         fresh.errorMessage ?: "알 수 없는 오류"
                     )
                 }
-                // 시도 도중 네트워크가 끊겼을 수 있다 → 온라인일 때만 '실패' 음성,
-                // 오프라인이면 음성 없이 자동 재전송 예약(헛된 알림 방지).
-                if (NetworkUtil.isOnline(context)) {
-                    playTtsError(context)
-                } else {
-                    enqueueResendOnReconnect(context)
-                    Log.d(TAG, "업로드 실패 후 오프라인 — 음성 생략, 자동 전송 예약 id=$historyId")
+                // 승인취소면 markRevoked가 이미 1회 안내함 → 일반 실패음성 생략.
+                // 그 외엔 온라인일 때만 '실패' 음성, 오프라인이면 음성 없이 자동 재전송 예약(헛된 알림 방지).
+                when {
+                    DeviceStatus.isRevoked(context) ->
+                        Log.d(TAG, "승인취소 — 일반 실패음성 생략 id=$historyId")
+                    NetworkUtil.isOnline(context) -> playTtsError(context)
+                    else -> {
+                        enqueueResendOnReconnect(context)
+                        Log.d(TAG, "업로드 실패 후 오프라인 — 음성 생략, 자동 전송 예약 id=$historyId")
+                    }
                 }
             }
         }
@@ -143,8 +150,15 @@ object UploadManager {
                 Log.d(TAG, "Upload success (uploadOnce) id=$historyId")
                 true
             } else {
-                history.errorCode = "SERVER_500"
-                history.errorMessage = response.body()?.message ?: "서버 업로드 실패"
+                if (response.code() == 401) {
+                    // 서버가 명시적으로 거부(AUTH_ERR) → 승인취소 확정. 수집 중단 트리거.
+                    DeviceStatus.markRevoked(context)
+                    history.errorCode = "AUTH_ERR"
+                    history.errorMessage = "승인이 취소된 단말기입니다."
+                } else {
+                    history.errorCode = "SERVER_500"
+                    history.errorMessage = response.body()?.message ?: "서버 업로드 실패"
+                }
                 dao.update(history)
                 Log.e(TAG, "Upload failed (uploadOnce) id=$historyId: ${history.errorMessage}")
                 false

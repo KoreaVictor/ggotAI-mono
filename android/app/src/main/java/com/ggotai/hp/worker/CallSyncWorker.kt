@@ -8,6 +8,7 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
+import com.ggotai.hp.manager.DeviceStatus
 import com.ggotai.hp.manager.UploadManager
 import com.ggotai.hp.util.CallLogReader
 import com.ggotai.hp.util.CustomerResolver
@@ -39,6 +40,11 @@ class CallSyncWorker(
         
         if (!isAutoSyncEnabled) {
             Log.d(TAG, "CallSyncWorker 중단 - 환경설정에서 자동 연동이 꺼져 있습니다.")
+            return@withContext Result.success()
+        }
+
+        if (DeviceStatus.isRevoked(context)) {
+            Log.d(TAG, "기기 승인취소 — CallSyncWorker 수집 중단")
             return@withContext Result.success()
         }
 

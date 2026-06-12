@@ -9,6 +9,7 @@ import android.util.Log
 import com.ggotai.hp.service.RecordingService
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.ggotai.hp.manager.DeviceStatus
 import com.ggotai.hp.worker.CallSyncWorker
 import java.util.concurrent.TimeUnit
 
@@ -35,7 +36,8 @@ class CallReceiver : BroadcastReceiver() {
     }
 
     private fun onCallStateChanged(context: Context, state: Int) {
-        if (lastState == TelephonyManager.CALL_STATE_IDLE && state == TelephonyManager.CALL_STATE_RINGING) {
+        if (
+            lastState == TelephonyManager.CALL_STATE_IDLE && state == TelephonyManager.CALL_STATE_RINGING) {
             // Incoming call ringing
         } else if (lastState == TelephonyManager.CALL_STATE_RINGING && state == TelephonyManager.CALL_STATE_OFFHOOK) {
             // Incoming call answered
@@ -71,6 +73,11 @@ class CallReceiver : BroadcastReceiver() {
     }
 
     private fun scheduleCallSyncWork(context: Context) {
+        if (DeviceStatus.isRevoked(context)) {
+            Log.d(TAG, "기기 승인취소 — 통화 동기화 예약 건너뜀")
+            return
+        }
+
         Log.d(TAG, "Scheduling call sync work via WorkManager")
 
         val workRequest = OneTimeWorkRequestBuilder<CallSyncWorker>()

@@ -29,14 +29,36 @@ object UploadManager {
     private const val RETRY_DELAY_MS = 2000L
 
     private var tts: TextToSpeech? = null
+    // TTS 엔진(예: Samsung SMT)은 콜드 스타트 시 바인딩에 수 초가 걸린다. 준비 전에 들어온
+    // speak 요청은 드롭되므로, 준비 여부를 추적하고 마지막 요청을 보관했다가 onInit에서 재생한다.
+    @Volatile private var ttsReady = false
+    @Volatile private var pendingMessage: Pair<String, String>? = null
 
     fun initTts(context: Context) {
         if (tts == null) {
             tts = TextToSpeech(context.applicationContext) { status ->
                 if (status == TextToSpeech.SUCCESS) {
                     tts?.language = Locale.KOREAN
+                    ttsReady = true
+                    // 엔진 준비 전에 보관해 둔 발화가 있으면 지금 재생(콜드 스타트 레이스 방지)
+                    pendingMessage?.let { (msg, id) ->
+                        tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, id)
+                        pendingMessage = null
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * TTS 엔진이 준비됐으면 즉시 재생하고, 아직 준비 전이면 마지막 메시지를 보관했다가
+     * [initTts]의 onInit에서 재생한다. (모든 음성 안내의 공통 진입점)
+     */
+    private fun speakOrQueue(message: String, utteranceId: String) {
+        if (ttsReady) {
+            tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        } else {
+            pendingMessage = message to utteranceId
         }
     }
 
@@ -75,6 +97,10 @@ object UploadManager {
             while (attempt < MAX_RETRIES && !success) {
                 success = uploadOnce(context, historyId)
                 if (!success) {
+                    if (DeviceStatus.isRevoked(context)) {
+                        Log.d(TAG, "승인취소 감지 — 재시도 중단 id=$historyId")
+                        break  // 401은 재시도해도 동일 → 무의미
+                    }
                     attempt++
                     if (attempt < MAX_RETRIES) delay(RETRY_DELAY_MS)
                 }
@@ -90,13 +116,16 @@ object UploadManager {
                         fresh.errorMessage ?: "알 수 없는 오류"
                     )
                 }
-                // 시도 도중 네트워크가 끊겼을 수 있다 → 온라인일 때만 '실패' 음성,
-                // 오프라인이면 음성 없이 자동 재전송 예약(헛된 알림 방지).
-                if (NetworkUtil.isOnline(context)) {
-                    playTtsError(context)
-                } else {
-                    enqueueResendOnReconnect(context)
-                    Log.d(TAG, "업로드 실패 후 오프라인 — 음성 생략, 자동 전송 예약 id=$historyId")
+                // 승인취소면 markRevoked가 이미 1회 안내함 → 일반 실패음성 생략.
+                // 그 외엔 온라인일 때만 '실패' 음성, 오프라인이면 음성 없이 자동 재전송 예약(헛된 알림 방지).
+                when {
+                    DeviceStatus.isRevoked(context) ->
+                        Log.d(TAG, "승인취소 — 일반 실패음성 생략 id=$historyId")
+                    NetworkUtil.isOnline(context) -> playTtsError(context)
+                    else -> {
+                        enqueueResendOnReconnect(context)
+                        Log.d(TAG, "업로드 실패 후 오프라인 — 음성 생략, 자동 전송 예약 id=$historyId")
+                    }
                 }
             }
         }
@@ -143,8 +172,15 @@ object UploadManager {
                 Log.d(TAG, "Upload success (uploadOnce) id=$historyId")
                 true
             } else {
-                history.errorCode = "SERVER_500"
-                history.errorMessage = response.body()?.message ?: "서버 업로드 실패"
+                if (response.code() == 401) {
+                    // 서버가 명시적으로 거부(AUTH_ERR) → 승인취소 확정. 수집 중단 트리거.
+                    DeviceStatus.markRevoked(context)
+                    history.errorCode = "AUTH_ERR"
+                    history.errorMessage = "승인이 취소된 단말기입니다."
+                } else {
+                    history.errorCode = "SERVER_500"
+                    history.errorMessage = response.body()?.message ?: "서버 업로드 실패"
+                }
                 dao.update(history)
                 Log.e(TAG, "Upload failed (uploadOnce) id=$historyId: ${history.errorMessage}")
                 false
@@ -172,7 +208,7 @@ object UploadManager {
             Log.d(TAG, "use_notification=N: TTS 실패 알림 생략")
             return
         }
-        tts?.speak("전송에 실패했습니다. 수동으로 재전송을 눌러주세요.", TextToSpeech.QUEUE_FLUSH, null, "UploadError")
+        speakOrQueue("전송에 실패했습니다. 수동으로 재전송을 눌러주세요.", "UploadError")
     }
 
     /**
@@ -185,11 +221,11 @@ object UploadManager {
             Log.d(TAG, "use_notification=N: TTS 영구실패 알림 생략")
             return
         }
-        tts?.speak("전송하지 못한 통화가 ${count}건 있습니다. 앱에서 확인해 주세요.", TextToSpeech.QUEUE_FLUSH, null, "PermanentFailure")
+        speakOrQueue("전송하지 못한 통화가 ${count}건 있습니다. 앱에서 확인해 주세요.", "PermanentFailure")
     }
 
     fun speak(message: String) {
-        tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "UploadMessage")
+        speakOrQueue(message, "UploadMessage")
     }
 
     /**

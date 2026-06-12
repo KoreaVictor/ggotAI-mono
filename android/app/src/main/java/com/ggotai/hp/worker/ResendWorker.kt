@@ -4,8 +4,10 @@ import android.content.Context
 import android.content.Intent
 import android.util.Log
 import androidx.work.CoroutineWorker
+import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import com.ggotai.hp.db.AppDatabase
+import com.ggotai.hp.manager.DeviceStatus
 import com.ggotai.hp.manager.UploadManager
 import com.ggotai.hp.policy.ResendPolicy
 import kotlinx.coroutines.Dispatchers
@@ -40,6 +42,12 @@ class ResendWorker(
         val prefs = applicationContext.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
         if (!prefs.getBoolean("AUTO_SYNC_ENABLED", true)) {
             Log.d(TAG, "자동 연동 OFF — 재전송 워커 건너뜀")
+            return Result.success()
+        }
+
+        if (DeviceStatus.isRevoked(applicationContext)) {
+            Log.d(TAG, "기기 승인취소 — 재전송 워커 중단 + 주기 취소")
+            WorkManager.getInstance(applicationContext).cancelUniqueWork(UNIQUE_NAME)
             return Result.success()
         }
 

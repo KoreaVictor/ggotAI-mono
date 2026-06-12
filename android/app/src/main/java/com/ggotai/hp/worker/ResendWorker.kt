@@ -43,11 +43,15 @@ class ResendWorker(
             return Result.success()
         }
 
+        // 영구실패 음성 안내를 위해 TTS 미리 초기화(엔진 연결은 비동기 → 업로드 진행 중 준비됨).
+        UploadManager.initTts(applicationContext)
+
         val dao = AppDatabase.getDatabase(applicationContext).callHistoryDao()
         val items = dao.getRetryable(ResendPolicy.MAX_RETRY)
         Log.d(TAG, "재시도 대상 ${items.size}건")
 
         var changed = false
+        var newPermanentFailures = 0
         for (item in items) {
             val file = File(item.audioFilePath)
             if (item.audioFilePath.isEmpty() || !file.exists()) {
@@ -55,6 +59,7 @@ class ResendWorker(
                 item.syncStatus = 2
                 dao.update(item)
                 changed = true
+                newPermanentFailures++
                 Log.d(TAG, "녹음파일 없음 → 영구실패 처리 id=${item.id}")
                 continue
             }
@@ -70,12 +75,17 @@ class ResendWorker(
                 fresh.syncStatus = newSync
                 dao.update(fresh)
                 changed = true
+                if (newSync == 2) newPermanentFailures++
                 Log.d(TAG, "재전송 실패 id=${item.id} retry=$newCount sync=$newSync")
             }
         }
 
         if (changed) {
             applicationContext.sendBroadcast(Intent("com.ggotai.hp.ACTION_UPDATE_HISTORY"))
+        }
+        if (newPermanentFailures > 0) {
+            Log.d(TAG, "영구실패 ${newPermanentFailures}건 → 음성 안내")
+            UploadManager.playTtsPermanentFailure(applicationContext, newPermanentFailures)
         }
         return Result.success()
     }

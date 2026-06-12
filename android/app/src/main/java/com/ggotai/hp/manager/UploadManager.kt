@@ -175,6 +175,19 @@ object UploadManager {
         tts?.speak("전송에 실패했습니다. 수동으로 재전송을 눌러주세요.", TextToSpeech.QUEUE_FLUSH, null, "UploadError")
     }
 
+    /**
+     * 자동 재전송이 상한에 도달해 영구실패(sync_status=2)가 된 건을 1회 요약 안내한다.
+     * playTtsError와 동일하게 use_notification=N이면 생략.
+     */
+    fun playTtsPermanentFailure(context: Context, count: Int) {
+        val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+        if (prefs.getString("USE_NOTIFICATION", "Y") == "N") {
+            Log.d(TAG, "use_notification=N: TTS 영구실패 알림 생략")
+            return
+        }
+        tts?.speak("전송하지 못한 통화가 ${count}건 있습니다. 앱에서 확인해 주세요.", TextToSpeech.QUEUE_FLUSH, null, "PermanentFailure")
+    }
+
     fun speak(message: String) {
         tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "UploadMessage")
     }

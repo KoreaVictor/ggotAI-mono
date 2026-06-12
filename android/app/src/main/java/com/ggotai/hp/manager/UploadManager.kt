@@ -29,14 +29,36 @@ object UploadManager {
     private const val RETRY_DELAY_MS = 2000L
 
     private var tts: TextToSpeech? = null
+    // TTS 엔진(예: Samsung SMT)은 콜드 스타트 시 바인딩에 수 초가 걸린다. 준비 전에 들어온
+    // speak 요청은 드롭되므로, 준비 여부를 추적하고 마지막 요청을 보관했다가 onInit에서 재생한다.
+    @Volatile private var ttsReady = false
+    @Volatile private var pendingMessage: Pair<String, String>? = null
 
     fun initTts(context: Context) {
         if (tts == null) {
             tts = TextToSpeech(context.applicationContext) { status ->
                 if (status == TextToSpeech.SUCCESS) {
                     tts?.language = Locale.KOREAN
+                    ttsReady = true
+                    // 엔진 준비 전에 보관해 둔 발화가 있으면 지금 재생(콜드 스타트 레이스 방지)
+                    pendingMessage?.let { (msg, id) ->
+                        tts?.speak(msg, TextToSpeech.QUEUE_FLUSH, null, id)
+                        pendingMessage = null
+                    }
                 }
             }
+        }
+    }
+
+    /**
+     * TTS 엔진이 준비됐으면 즉시 재생하고, 아직 준비 전이면 마지막 메시지를 보관했다가
+     * [initTts]의 onInit에서 재생한다. (모든 음성 안내의 공통 진입점)
+     */
+    private fun speakOrQueue(message: String, utteranceId: String) {
+        if (ttsReady) {
+            tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, utteranceId)
+        } else {
+            pendingMessage = message to utteranceId
         }
     }
 
@@ -186,7 +208,7 @@ object UploadManager {
             Log.d(TAG, "use_notification=N: TTS 실패 알림 생략")
             return
         }
-        tts?.speak("전송에 실패했습니다. 수동으로 재전송을 눌러주세요.", TextToSpeech.QUEUE_FLUSH, null, "UploadError")
+        speakOrQueue("전송에 실패했습니다. 수동으로 재전송을 눌러주세요.", "UploadError")
     }
 
     /**
@@ -199,11 +221,11 @@ object UploadManager {
             Log.d(TAG, "use_notification=N: TTS 영구실패 알림 생략")
             return
         }
-        tts?.speak("전송하지 못한 통화가 ${count}건 있습니다. 앱에서 확인해 주세요.", TextToSpeech.QUEUE_FLUSH, null, "PermanentFailure")
+        speakOrQueue("전송하지 못한 통화가 ${count}건 있습니다. 앱에서 확인해 주세요.", "PermanentFailure")
     }
 
     fun speak(message: String) {
-        tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "UploadMessage")
+        speakOrQueue(message, "UploadMessage")
     }
 
     /**

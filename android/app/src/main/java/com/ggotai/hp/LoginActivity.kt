@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.ggotai.hp.api.RetrofitClient
 import com.ggotai.hp.databinding.ActivityLoginBinding
+import com.ggotai.hp.manager.DeviceStatus
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -136,6 +137,7 @@ class LoginActivity : AppCompatActivity() {
                 }
                 
                 if (response.isSuccessful && response.body()?.status == "success") {
+                    DeviceStatus.clearRevoked(this@LoginActivity)
                     val shopName = response.body()?.data?.shop_name ?: "꽃가게"
                     Toast.makeText(this@LoginActivity, "$shopName 님 환영합니다.", Toast.LENGTH_SHORT).show()
                     

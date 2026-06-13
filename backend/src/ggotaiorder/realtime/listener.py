@@ -10,7 +10,9 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from ggotaiorder.core.supabase_client import get_client
+from supabase import acreate_client
+
+from ggotaiorder.config import load_config
 from ggotaiorder.pipeline.engine import process
 
 logger = logging.getLogger(__name__)
@@ -20,16 +22,24 @@ _REALTIME_CHANNELS = {"핸드폰", "가게음성"}
 
 
 class RealtimeListener:
-    """server_call_history INSERT 구독 리스너."""
+    """server_call_history INSERT 구독 리스너.
+
+    Realtime 은 supabase-py 의 비동기 클라이언트에서만 동작하므로(sync 클라이언트는
+    NotImplementedError) acreate_client 로 별도 async 클라이언트를 만들어 구독한다.
+    """
 
     def __init__(self) -> None:
+        self._client = None
         self._channel = None
         self._tasks: set[asyncio.Task] = set()
 
     async def start(self) -> None:
-        """Realtime 채널 구독을 시작한다 (라이브 검증은 체크리스트)."""
-        client = get_client()
-        self._channel = client.channel("server_call_history_inserts")
+        """Realtime 채널 구독을 시작한다."""
+        cfg = load_config()
+        self._client = await acreate_client(
+            cfg.supabase_url, cfg.supabase_service_role_key
+        )
+        self._channel = self._client.channel("server_call_history_inserts")
         self._channel.on_postgres_changes(
             event="INSERT",
             schema="public",
@@ -40,11 +50,17 @@ class RealtimeListener:
         logger.info("Realtime 구독 시작: server_call_history INSERT")
 
     async def stop(self) -> None:
-        """구독을 해제한다."""
+        """구독을 해제하고 async 클라이언트 소켓을 닫는다."""
         if self._channel is not None:
             await self._channel.unsubscribe()
             self._channel = None
-            logger.info("Realtime 구독 해제")
+        if self._client is not None:
+            try:
+                await self._client.realtime.close()
+            except Exception:  # noqa: BLE001 - 종료 best-effort
+                logger.debug("realtime close 중 예외(무시)", exc_info=True)
+            self._client = None
+        logger.info("Realtime 구독 해제")
 
     def _on_message(self, payload: dict) -> None:
         """raw Realtime 메시지에서 record를 방어적으로 추출해 처리로 넘긴다."""

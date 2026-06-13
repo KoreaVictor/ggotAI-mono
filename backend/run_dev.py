@@ -6,6 +6,17 @@ Ctrl+C 로 종료.
 
 from __future__ import annotations
 
+import os
+import sys
+
+# pythonw.exe(콘솔 없음)로 실행되면 sys.stdout/stderr 가 None 이라, uvicorn·로깅이
+# 표준 스트림에 쓰려다 크래시한다(작업 스케줄러 백그라운드 실행). None 이면 devnull 로 보정.
+# (실제 로그는 logging_setup 의 회전 파일 핸들러로 남는다)
+if sys.stdout is None:
+    sys.stdout = open(os.devnull, "w")
+if sys.stderr is None:
+    sys.stderr = open(os.devnull, "w")
+
 import asyncio
 
 from ggotaiorder.logging_setup import setup_logging

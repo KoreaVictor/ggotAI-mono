@@ -43,6 +43,7 @@ export interface OrderDetails {
   quantity: number;
   price: number;
   delivery_at: string;
+  delivery_at_text: string | null;
   delivery_place: string;
   receiver_name: string;
   receiver_phone_number: string;

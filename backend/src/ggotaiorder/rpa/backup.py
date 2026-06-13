@@ -18,7 +18,7 @@ logger = logging.getLogger(__name__)
 
 _HEADERS = [
     "주문ID", "꽃집KEY", "꽃집명", "채널", "고객명", "고객전화", "상품명",
-    "수량", "가격", "배송일시", "배송지", "받는분", "받는분전화",
+    "수량", "가격", "배송일시", "배송일시원문", "배송지", "받는분", "받는분전화",
     "리본_보내는분", "리본_경조사", "카드메시지",
 ]
 
@@ -27,7 +27,7 @@ def _row(o: RpaOrder) -> list:
     return [
         o.order_detail_id, o.shop_key, o.shop_name, o.channel,
         o.customer_name, o.customer_phone_number, o.product_name,
-        o.quantity, o.price, o.delivery_at, o.delivery_place,
+        o.quantity, o.price, o.delivery_at, o.delivery_at_text, o.delivery_place,
         o.receiver_name, o.receiver_phone_number,
         o.ribbon_sender, o.ribbon_congratulations, o.card_message,
     ]
@@ -45,7 +45,7 @@ def _receipt_text(o: RpaOrder) -> str:
         f"꽃집: {o.shop_name} (key={o.shop_key})",
         f"채널: {o.channel}",
         f"상품: {o.product_name} x {o.quantity} ({o.price}원)",
-        f"배송일시: {_v(o.delivery_at)}",
+        f"배송일시: {_v(o.delivery_at_text)}  (변환: {_v(o.delivery_at)})",
         f"배송지: {_v(o.delivery_place)}",
         f"받는분: {_v(o.receiver_name)} / {_v(o.receiver_phone_number)}",
         f"고객: {o.customer_name} / {o.customer_phone_number}",

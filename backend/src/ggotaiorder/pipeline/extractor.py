@@ -7,6 +7,7 @@ from __future__ import annotations
 
 import logging
 import time
+from datetime import datetime, timedelta, timezone
 
 from google import genai
 from google.genai import types
@@ -18,6 +19,8 @@ logger = logging.getLogger(__name__)
 
 GEMINI_MODEL = "gemini-2.5-flash"
 
+_KST = timezone(timedelta(hours=9))
+
 _SYSTEM_INSTRUCTION = (
     "너는 꽃집 주문 통화/텍스트에서 주문 정보를 추출하는 엄격한 추출기다.\n"
     "규칙:\n"
@@ -25,7 +28,12 @@ _SYSTEM_INSTRUCTION = (
     "2. 언급되지 않았거나 불확실하면 반드시 null. 추측·창작 금지.\n"
     "3. 예시/기본값(홍길동, 010-1234-5678 등)을 임의로 넣지 마라.\n"
     "4. 꽃 주문이 아니면(음식주문/잡담/광고 등) 모든 필드를 null.\n"
-    "5. 가격은 '5만원'->50000 처럼 원 단위 정수로 변환."
+    "5. 가격은 '5만원'->50000 처럼 원 단위 정수로 변환.\n"
+    "6. delivery_at 은 ISO 8601(예: 2026-06-14T15:00:00+09:00)로 변환한다. "
+    "'내일/오늘/모레 오후 3시' 같은 상대표현은 제공된 '현재 시각'을 기준으로 절대시각을 계산한다. "
+    "날짜·시간이 불명확하면 null.\n"
+    "7. delivery_at_text 에는 배달 시점을 말한 그대로의 원본 문구를 넣는다(예: '내일 오후 3시'). "
+    "언급이 없으면 null. (delivery_at 이 null 이어도 원문이 있으면 delivery_at_text 는 채운다.)"
 )
 
 _client: genai.Client | None = None
@@ -38,23 +46,28 @@ def _get_client() -> genai.Client:
     return _client
 
 
-def extract_order(stt_text: str, *, max_retries: int = 3) -> OrderExtraction:
-    """stt_text 에서 11개 주문 필드를 구조화 추출한다.
+def extract_order(
+    stt_text: str, *, reference_time: str | None = None, max_retries: int = 3
+) -> OrderExtraction:
+    """stt_text 에서 주문 필드를 구조화 추출한다.
 
+    reference_time: 상대 배송표현('내일' 등) 해석 기준 시각(ISO). 미지정 시 현재 KST.
     일시적 오류(예: 503)는 재시도하며, 끝내 실패하면 RuntimeError.
     """
     client = _get_client()
+    ref = reference_time or datetime.now(_KST).isoformat()
     config = types.GenerateContentConfig(
         system_instruction=_SYSTEM_INSTRUCTION,
         response_mime_type="application/json",
         response_schema=OrderExtraction,
         temperature=0,
     )
+    contents = f"현재 시각: {ref}\n입력:\n{stt_text}"
     last_error: Exception | None = None
     for attempt in range(max_retries):
         try:
             resp = client.models.generate_content(
-                model=GEMINI_MODEL, contents="입력:\n" + stt_text, config=config
+                model=GEMINI_MODEL, contents=contents, config=config
             )
             parsed = resp.parsed
             if isinstance(parsed, OrderExtraction):

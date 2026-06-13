@@ -65,6 +65,7 @@ class SupabaseRpaRepository:
             ribbon_sender=row.get("ribbon_sender"),
             ribbon_congratulations=row.get("ribbon_congratulations"),
             card_message=row.get("card_message"),
+            delivery_at_text=row.get("delivery_at_text"),
         )
 
     def set_rpa_status(self, order_detail_id: int, status: str) -> None:

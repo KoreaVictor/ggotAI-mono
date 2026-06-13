@@ -9,6 +9,7 @@ export interface OrderRow {
   quantity: number | null;
   price: number | null;
   delivery_at: string;
+  delivery_at_text: string | null;
   delivery_place: string;
   receiver_name: string;
   receiver_phone_number: string;

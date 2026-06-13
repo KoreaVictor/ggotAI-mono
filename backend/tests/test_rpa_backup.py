@@ -42,6 +42,18 @@ def test_backup_creates_missing_dir(tmp_path):
     assert target.exists()
 
 
+def test_backup_includes_delivery_at_text(tmp_path):
+    writer = BackupWriter(tmp_path / "backups")
+    xlsx_path, txt_path = writer.write(_order(delivery_at_text="내일 오후 3시"))
+
+    assert "내일 오후 3시" in txt_path.read_text(encoding="utf-8")
+    # xlsx 에도 원문이 실린다(어느 열이든)
+    ws = load_workbook(xlsx_path).active
+    assert "내일 오후 3시" in [c.value for c in ws[2]]
+    # 기존 열 위치 보존(수량=8열)
+    assert ws.cell(row=2, column=8).value == 2
+
+
 def test_receipt_renders_none_fields_as_dash(tmp_path):
     writer = BackupWriter(tmp_path / "backups")
     _, txt_path = writer.write(

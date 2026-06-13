@@ -28,3 +28,4 @@ class RpaOrder:
     ribbon_sender: str | None
     ribbon_congratulations: str | None
     card_message: str | None
+    delivery_at_text: str | None = None  # 배송시간 원본 문구(말한 그대로)

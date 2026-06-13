@@ -341,9 +341,16 @@ export function OrderListView() {
                       <span className="text-brand-text-secondary">결제 가격:</span>
                       <span className="font-semibold text-brand-success">{(selectedOrder.price ?? 0).toLocaleString()} 원</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-brand-text-secondary">배달 약속 일시:</span>
-                      <span className="font-semibold">{new Date(selectedOrder.delivery_at).toLocaleString('ko-KR')}</span>
+                    <div className="flex justify-between gap-3">
+                      <span className="text-brand-text-secondary shrink-0">배달 약속 일시:</span>
+                      <span className="font-semibold text-right">
+                        {selectedOrder.delivery_at_text ?? new Date(selectedOrder.delivery_at).toLocaleString('ko-KR')}
+                        {selectedOrder.delivery_at_text && !selectedOrder.delivery_at.startsWith('2099') && (
+                          <span className="block text-xs font-normal text-brand-text-muted">
+                            {new Date(selectedOrder.delivery_at).toLocaleString('ko-KR')}
+                          </span>
+                        )}
+                      </span>
                     </div>
                   </div>
                 </div>

@@ -50,7 +50,8 @@ CREATE TABLE IF NOT EXISTS order_details (
     product_name VARCHAR(150) NOT NULL,            -- 상품명
     quantity INT DEFAULT 1,                        -- 수량
     price INT DEFAULT 0,                           -- 가격
-    delivery_at TIMESTAMP WITH TIME ZONE NOT NULL, -- 배달일시 (YYYY-MM-DD HH:mm:ss)
+    delivery_at TIMESTAMP WITH TIME ZONE NOT NULL, -- 배달일시 (파싱된 ISO 시각, 불명확 시 센티넬)
+    delivery_at_text VARCHAR(100) DEFAULT NULL,    -- 배달일시 원본 문구 (말한 그대로, 예: '내일 오후 3시')
     delivery_place VARCHAR(255) NOT NULL,          -- 배달장소 (인증 배송지)
     receiver_name VARCHAR(50) NOT NULL,            -- 받는사람 이름
     receiver_phone_number VARCHAR(20) NOT NULL,    -- 받는사람 전화번호

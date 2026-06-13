@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from datetime import datetime
 
 from ggotaiorder.pipeline.extractor import extract_order
 from ggotaiorder.pipeline.models import DELIVERY_AT_UNKNOWN, CallHistory, OrderExtraction
@@ -19,22 +20,43 @@ from ggotaiorder.scraper.crawler import INTRANET_AUDIO_MARKER
 
 logger = logging.getLogger(__name__)
 
-# Gemini가 추출하는 11개 표준 주문서 필드 (OrderExtraction과 동일)
-ORDER_FIELDS = tuple(OrderExtraction.model_fields.keys())
+# Gemini가 추출하는 11개 표준 주문서 필드 (누락 판정 기준 — 보조필드 delivery_at_text 제외)
+ORDER_FIELDS = (
+    "customer_name", "customer_phone_number", "product_name", "quantity", "price",
+    "delivery_at", "delivery_place", "receiver_name", "receiver_phone_number",
+    "ribbon_congratulations", "card_message",
+)
 
 # 누락이 이 값 이상이면 꽃 주문이 아닌 것으로 판별 (PRD 6-4)
 _MISSING_THRESHOLD = 3
 
 
 def count_missing(extraction: OrderExtraction) -> int:
-    """11필드 중 None 또는 공백 문자열인 항목 수를 센다."""
+    """11 코어 필드 중 None 또는 공백 문자열인 항목 수를 센다(delivery_at_text 제외)."""
+    data = extraction.model_dump()
     missing = 0
-    for value in extraction.model_dump().values():
+    for name in ORDER_FIELDS:
+        value = data[name]
         if value is None:
             missing += 1
         elif isinstance(value, str) and value.strip() == "":
             missing += 1
     return missing
+
+
+def _normalize_delivery_at(value: str | None) -> str:
+    """배달일시를 유효한 timestamptz 문자열로 정규화한다.
+
+    Gemini가 ISO 8601 을 주면 그대로, 자연어("내일 오후 3시")거나 비어 있으면
+    센티넬로 폴백해 INSERT(NOT NULL) 가 절대 깨지지 않게 한다(원문은 delivery_at_text 보존).
+    """
+    if value:
+        try:
+            datetime.fromisoformat(value)
+            return value
+        except ValueError:
+            logger.info("delivery_at 파싱 불가 — 센티넬 폴백: %r", value)
+    return DELIVERY_AT_UNKNOWN
 
 
 def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
@@ -54,7 +76,8 @@ def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
         "product_name": extraction.product_name or "미정",
         "quantity": extraction.quantity if extraction.quantity is not None else 1,
         "price": extraction.price if extraction.price is not None else 0,
-        "delivery_at": extraction.delivery_at or DELIVERY_AT_UNKNOWN,
+        "delivery_at": _normalize_delivery_at(extraction.delivery_at),
+        "delivery_at_text": extraction.delivery_at_text,
         "delivery_place": extraction.delivery_place or "미정",
         "receiver_name": extraction.receiver_name or "미정",
         "receiver_phone_number": extraction.receiver_phone_number or "",

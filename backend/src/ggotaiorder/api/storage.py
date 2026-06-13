@@ -11,7 +11,7 @@ from ggotaiorder.core.supabase_client import get_client
 
 logger = logging.getLogger(__name__)
 
-AUDIO_BUCKET = "call-audio"
+AUDIO_BUCKET = "audio-files"
 
 
 class AudioStorage(Protocol):

@@ -20,6 +20,7 @@ class _FakeModel:
 
 
 def test_transcribe_downloads_runs_and_joins(monkeypatch):
+    monkeypatch.setenv("STT_PROVIDER", "local")
     monkeypatch.setattr(stt_mod, "_download_audio", lambda name: b"FAKEAUDIO")
     fake = _FakeModel([_Seg("  안녕하세요 "), _Seg("꽃 주문이요 ")])
     monkeypatch.setattr(stt_mod, "_get_model", lambda: fake)
@@ -34,6 +35,7 @@ def test_transcribe_downloads_runs_and_joins(monkeypatch):
 
 
 def test_transcribe_empty_segments_returns_empty(monkeypatch):
+    monkeypatch.setenv("STT_PROVIDER", "local")
     monkeypatch.setattr(stt_mod, "_download_audio", lambda name: b"X")
     monkeypatch.setattr(stt_mod, "_get_model", lambda: _FakeModel([]))
     assert transcribe("1/a.mp3") == ""

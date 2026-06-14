@@ -7,6 +7,7 @@ OrderRepository(Protocol)로 계약을 고정하고, 실제 구현은 Supabase�
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Optional, Protocol
 
 from ggotaiorder.core.supabase_client import get_client
@@ -22,7 +23,13 @@ class OrderRepository(Protocol):
 
     def update_stt_text(self, call_history_id: int, text: str) -> None: ...
 
-    def set_is_order(self, call_history_id: int, value: str) -> None: ...
+    def mark_processed(self, call_history_id: int, is_order: str) -> None: ...
+
+    def increment_attempts(self, call_history_id: int) -> None: ...
+
+    def list_pending_call_ids(
+        self, channels: set[str], max_attempts: int
+    ) -> list[int]: ...
 
     def insert_order_details(self, payload: dict) -> int: ...
 
@@ -58,10 +65,44 @@ class SupabaseOrderRepository:
             {"stt_text": text}
         ).eq("id", call_history_id).execute()
 
-    def set_is_order(self, call_history_id: int, value: str) -> None:
+    def mark_processed(self, call_history_id: int, is_order: str) -> None:
         get_client().table("server_call_history").update(
-            {"is_order": value}
+            {
+                "is_order": is_order,
+                "processed_at": datetime.now(timezone.utc).isoformat(),
+            }
         ).eq("id", call_history_id).execute()
+
+    def increment_attempts(self, call_history_id: int) -> None:
+        # PostgREST에 원자적 increment가 없어 read-modify-write 한다.
+        # in-flight 가드가 동일 id 동시 처리를 막으므로 경합 없음(단일 PC).
+        res = (
+            get_client()
+            .table("server_call_history")
+            .select("process_attempts")
+            .eq("id", call_history_id)
+            .single()
+            .execute()
+        )
+        current = res.data.get("process_attempts") or 0
+        get_client().table("server_call_history").update(
+            {"process_attempts": current + 1}
+        ).eq("id", call_history_id).execute()
+
+    def list_pending_call_ids(
+        self, channels: set[str], max_attempts: int
+    ) -> list[int]:
+        res = (
+            get_client()
+            .table("server_call_history")
+            .select("id")
+            .in_("channel_order", list(channels))
+            .is_("processed_at", "null")
+            .lt("process_attempts", max_attempts)
+            .order("id")
+            .execute()
+        )
+        return [r["id"] for r in res.data]
 
     def insert_order_details(self, payload: dict) -> int:
         res = get_client().table("order_details").insert(payload).execute()

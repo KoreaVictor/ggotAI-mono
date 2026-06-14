@@ -30,6 +30,13 @@ ORDER_FIELDS = (
 # 누락이 이 값 이상이면 꽃 주문이 아닌 것으로 판별 (PRD 6-4)
 _MISSING_THRESHOLD = 3
 
+# 영구 실패 행의 무한 재시도 차단 상한 (catch-up 스캔과 공유)
+MAX_ATTEMPTS = 5
+
+# 처리 중인 call_history_id (Realtime 콜백과 catch-up 스캔의 중복 처리 방지).
+# 오케스트레이터가 단일 asyncio 루프라 add가 첫 await 이전에 일어나 원자적이다.
+_in_flight: set[int] = set()
+
 
 def count_missing(extraction: OrderExtraction) -> int:
     """11 코어 필드 중 None 또는 공백 문자열인 항목 수를 센다(delivery_at_text 제외)."""
@@ -90,9 +97,22 @@ def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
 async def process(call_history_id: int, repo: OrderRepository | None = None) -> None:
     """단일 수집 건을 정형화 처리한다.
 
+    같은 id가 이미 처리 중이면 즉시 스킵한다(중복 주문 INSERT 방지).
     repo 미지정 시 SupabaseOrderRepository 를 사용한다(테스트는 fake 주입).
     """
-    repo = repo or SupabaseOrderRepository()
+    if call_history_id in _in_flight:
+        logger.debug("이미 처리 중 — 스킵 id=%s", call_history_id)
+        return
+    _in_flight.add(call_history_id)
+    try:
+        await _process_inner(call_history_id, repo or SupabaseOrderRepository())
+    finally:
+        _in_flight.discard(call_history_id)
+
+
+async def _process_inner(call_history_id: int, repo: OrderRepository) -> None:
+    # 시도 횟수를 먼저 올린다(실패해도 카운트 → MAX_ATTEMPTS 상한이 적용됨).
+    await asyncio.to_thread(repo.increment_attempts, call_history_id)
 
     try:
         row = await asyncio.to_thread(repo.get_call_history, call_history_id)
@@ -114,8 +134,6 @@ async def process(call_history_id: int, repo: OrderRepository | None = None) -> 
             return
 
     try:
-        # 동기 Gemini 호출(재시도 time.sleep 포함)을 워커 스레드로 오프로드해
-        # asyncio 이벤트 루프를 블로킹하지 않는다.
         extraction = await asyncio.to_thread(extract_order, stt_text)
     except Exception:
         logger.exception("Gemini 추출 실패 id=%s", call_history_id)
@@ -123,21 +141,20 @@ async def process(call_history_id: int, repo: OrderRepository | None = None) -> 
 
     missing = count_missing(extraction)
     if missing >= _MISSING_THRESHOLD:
-        await asyncio.to_thread(repo.set_is_order, call_history_id, "N")
+        await asyncio.to_thread(repo.mark_processed, call_history_id, "N")
         await asyncio.to_thread(repo.delete_audio, row.audio_file_name)
         logger.info("주문 아님 판별 id=%s (누락 %s개)", call_history_id, missing)
         return
 
-    # order_details INSERT가 성공한 뒤에만 is_order='Y'로 마킹한다.
-    # 순서를 뒤집으면 INSERT 실패 시 주문 행 없이 is_order만 'Y'가 되는 부분쓰기가 남는다.
+    # order_details INSERT가 성공한 뒤에만 종결('Y')로 마킹한다(부분쓰기 방지).
     try:
         order_id = await asyncio.to_thread(
             repo.insert_order_details, _build_order_payload(row, extraction)
         )
     except Exception:
-        logger.exception("order_details 생성 실패 — is_order 미변경 id=%s", call_history_id)
+        logger.exception("order_details 생성 실패 — 미종결 id=%s", call_history_id)
         return
 
-    await asyncio.to_thread(repo.set_is_order, call_history_id, "Y")
+    await asyncio.to_thread(repo.mark_processed, call_history_id, "Y")
     logger.info("order_details 생성 id=%s order_id=%s", call_history_id, order_id)
     await enqueue(order_id)

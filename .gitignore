@@ -1,0 +1,12 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.idea/
+*.iml
+
+# 백업 폴더(루트 하위에 생기면)
+ggotAI_backup_*/
+
+# 앱 외 루트 잡파일(추적 제외) — 필요 시 docs/로 정리
+/화면 캡처 *.png
+/ggotAIya/

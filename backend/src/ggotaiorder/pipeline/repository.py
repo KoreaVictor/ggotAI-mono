@@ -76,6 +76,7 @@ class SupabaseOrderRepository:
     def increment_attempts(self, call_history_id: int) -> None:
         # PostgREST에 원자적 increment가 없어 read-modify-write 한다.
         # in-flight 가드가 동일 id 동시 처리를 막으므로 경합 없음(단일 PC).
+        # (멀티 인스턴스로 확장 시엔 원자적 increment RPC가 필요 — 현재 단일 PC 전제.)
         res = (
             get_client()
             .table("server_call_history")

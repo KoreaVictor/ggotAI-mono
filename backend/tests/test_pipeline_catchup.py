@@ -1,7 +1,7 @@
 """CatchupScanner 단위 테스트.
 
 scan_once() 는 REALTIME_CHANNELS 집합과 MAX_ATTEMPTS 상한을 engine 에서 가져와
-미처리(is_processed=NULL) 행을 repo.list_pending_call_ids 로 조회한 뒤
+미처리(processed_at=NULL) 행을 repo.list_pending_call_ids 로 조회한 뒤
 각 id 에 대해 process(call_history_id, repo=self._repo) 를 호출하고
 처리 건수(int) 를 반환한다.
 """

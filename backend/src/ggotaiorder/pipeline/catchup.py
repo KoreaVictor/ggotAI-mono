@@ -1,7 +1,7 @@
 """catch-up 스캔: 서버 재시작 또는 Realtime 누락으로 미처리된 행을 재처리.
 
 Realtime 리스너가 INSERT 이벤트를 놓쳤거나 서버가 다운된 사이에 쌓인
-is_processed=NULL 행을 주기적으로 조회해 pipeline.process 로 넘긴다.
+processed_at=NULL 행을 주기적으로 조회해 pipeline.process 로 넘긴다.
 
 채널 필터(``REALTIME_CHANNELS``)와 최대 시도 횟수(``MAX_ATTEMPTS``)는
 engine 에서 import — 단일 출처(single source of truth).
@@ -32,7 +32,7 @@ class CatchupScanner:
         self._repo = repo or SupabaseOrderRepository()
 
     async def scan_once(self) -> int:
-        """is_processed=NULL && attempts < MAX_ATTEMPTS 인 행을 모두 처리한다.
+        """processed_at=NULL && attempts < MAX_ATTEMPTS 인 행을 모두 처리한다.
 
         list_pending_call_ids 가 예외를 던지면 그대로 전파한다.
         개별 process() 예외는 흡수하고 나머지 id 처리를 계속한다.

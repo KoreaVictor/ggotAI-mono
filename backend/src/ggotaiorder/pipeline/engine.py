@@ -31,7 +31,7 @@ ORDER_FIELDS = (
 _MISSING_THRESHOLD = 3
 
 # Realtime이 직접 처리하는 채널 (catch-up 스캔도 같은 집합을 사용 — 단일 출처).
-_REALTIME_CHANNELS = {"핸드폰", "가게음성"}
+REALTIME_CHANNELS = {"핸드폰", "가게음성"}
 
 # 영구 실패 행의 무한 재시도 차단 상한 (catch-up 스캔과 공유)
 MAX_ATTEMPTS = 5

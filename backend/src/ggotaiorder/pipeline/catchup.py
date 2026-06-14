@@ -3,7 +3,7 @@
 Realtime 리스너가 INSERT 이벤트를 놓쳤거나 서버가 다운된 사이에 쌓인
 is_processed=NULL 행을 주기적으로 조회해 pipeline.process 로 넘긴다.
 
-채널 필터(``_REALTIME_CHANNELS``)와 최대 시도 횟수(``MAX_ATTEMPTS``)는
+채널 필터(``REALTIME_CHANNELS``)와 최대 시도 횟수(``MAX_ATTEMPTS``)는
 engine 에서 import — 단일 출처(single source of truth).
 """
 
@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from ggotaiorder.pipeline.engine import MAX_ATTEMPTS, _REALTIME_CHANNELS, process
+from ggotaiorder.pipeline.engine import MAX_ATTEMPTS, REALTIME_CHANNELS, process
 from ggotaiorder.pipeline.repository import OrderRepository, SupabaseOrderRepository
 
 logger = logging.getLogger(__name__)
@@ -36,10 +36,10 @@ class CatchupScanner:
 
         list_pending_call_ids 가 예외를 던지면 그대로 전파한다.
         개별 process() 예외는 흡수하고 나머지 id 처리를 계속한다.
-        처리한 id 수를 반환한다(미처리 행이 없으면 0).
+        발견한(시도한) 미처리 건수를 반환한다(예외가 난 id 포함; 미처리 행이 없으면 0).
         """
         ids = await asyncio.to_thread(
-            self._repo.list_pending_call_ids, _REALTIME_CHANNELS, MAX_ATTEMPTS
+            self._repo.list_pending_call_ids, REALTIME_CHANNELS, MAX_ATTEMPTS
         )
         if not ids:
             return 0

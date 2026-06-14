@@ -74,15 +74,19 @@ class Orchestrator:
 
         await self._listener.start()
 
-        # 부팅 직후: 구독 이후 1회 스캔(오프라인/절전 누락분 따라잡기).
-        # 구독 후에 실행하므로 스캔 중 도착분은 Realtime이 받고 in-flight로 중복 방지.
-        await self._scheduled_catchup()
-
         self._scheduler.add_job(
             self._scheduled_poll,
             "interval",
             minutes=_DEFAULT_INTRANET_INTERVAL_MIN,
             id="intranet_poll",
+        )
+        # 부팅 직후 1회: 스케줄러가 시작되면 즉시 실행(오프라인/절전 누락분 따라잡기).
+        # 일회성 잡으로 위임해 uvicorn/스케줄러 기동을 블로킹하지 않는다.
+        # (리스너 구독은 이미 위에서 끝났으므로, 스캔 중 도착분은 Realtime이 받고 in-flight로 중복 방지.)
+        self._scheduler.add_job(
+            self._scheduled_catchup,
+            "date",
+            id="catchup_boot",
         )
         self._scheduler.add_job(
             self._scheduled_catchup,
@@ -90,6 +94,7 @@ class Orchestrator:
             minutes=_CATCHUP_INTERVAL_MIN,
             id="catchup_scan",
             max_instances=1,
+            coalesce=True,
         )
         self._scheduler.start()
 

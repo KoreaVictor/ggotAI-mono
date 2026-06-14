@@ -2,113 +2,109 @@
 
 scan_once() 는 _REALTIME_CHANNELS 집합과 MAX_ATTEMPTS 상한을 engine 에서 가져와
 미처리(is_processed=NULL) 행을 repo.list_pending_call_ids 로 조회한 뒤
-각 id 에 대해 process() 를 호출한다.
+각 id 에 대해 process(call_history_id, repo=self._repo) 를 호출하고
+처리 건수(int) 를 반환한다.
 """
 
 from __future__ import annotations
 
-import asyncio
-
 import pytest
 
-from ggotaiorder.pipeline import catchup as catchup_mod
+from ggotaiorder.pipeline import catchup
+from ggotaiorder.pipeline import engine
 from ggotaiorder.pipeline.catchup import CatchupScanner
-from ggotaiorder.pipeline.engine import MAX_ATTEMPTS, _REALTIME_CHANNELS
 
 
 # ---------------------------------------------------------------------------
 # Fake repo
 # ---------------------------------------------------------------------------
 
-class FakeRepo:
-    def __init__(self, pending: list[int] | None = None):
-        self._pending = pending or []
-        self.list_calls: list[tuple] = []
+class FakeScanRepo:
+    """list_pending_call_ids 를 흉내 내는 가짜 repo."""
 
-    def list_pending_call_ids(self, channels: set[str], max_attempts: int) -> list[int]:
-        self.list_calls.append((channels, max_attempts))
-        return self._pending
+    def __init__(self, pending: list[int]):
+        self._pending = pending
+        self.queried: list[tuple] = []
+
+    def list_pending_call_ids(self, channels, max_attempts) -> list[int]:
+        self.queried.append((channels, max_attempts))
+        return list(self._pending)
 
 
 # ---------------------------------------------------------------------------
-# 헬퍼
+# 스펙 필수 테스트
 # ---------------------------------------------------------------------------
 
-def _make_scanner(repo: FakeRepo, monkeypatch) -> tuple[CatchupScanner, list[int]]:
-    """CatchupScanner 를 fake repo 와 process 스파이로 초기화한다."""
+async def test_scan_once_processes_each_pending(monkeypatch):
+    """미처리 행마다 process 가 한 번씩 호출되고, 반환값은 처리 건수이다.
+    process 에 주입된 repo 가 실제로 전달되는지도 확인한다."""
+    repo = FakeScanRepo([10, 11, 12])
     processed: list[int] = []
+    repos_seen: list = []
 
-    async def spy_process(call_history_id: int, **_kw) -> None:
+    async def fake_process(call_history_id, repo=None):
         processed.append(call_history_id)
+        repos_seen.append(repo)
 
-    monkeypatch.setattr(catchup_mod, "process", spy_process)
+    monkeypatch.setattr(catchup, "process", fake_process)
+
     scanner = CatchupScanner(repo=repo)
-    return scanner, processed
+    count = await scanner.scan_once()
+
+    assert processed == [10, 11, 12]
+    assert count == 3
+    channels, max_attempts = repo.queried[0]
+    assert channels == engine._REALTIME_CHANNELS
+    assert max_attempts == engine.MAX_ATTEMPTS
+
+    # 주입한 repo 가 process 로 전달되는지 확인
+    assert all(r is repo for r in repos_seen), "process 가 scanner 의 repo 를 받지 않았다"
+
+
+async def test_scan_once_empty_returns_zero(monkeypatch):
+    """미처리 행이 없으면 process 가 호출되지 않고 0 을 반환한다."""
+    repo = FakeScanRepo([])
+
+    async def fake_process(call_history_id, repo=None):
+        raise AssertionError("미처리 행이 없으면 process가 호출되면 안 된다")
+
+    monkeypatch.setattr(catchup, "process", fake_process)
+
+    scanner = CatchupScanner(repo=repo)
+    assert await scanner.scan_once() == 0
 
 
 # ---------------------------------------------------------------------------
-# 테스트
+# 추가 테스트 — 예외 격리 및 repo 예외 전파
 # ---------------------------------------------------------------------------
-
-async def test_scan_once_calls_process_for_each_pending(monkeypatch):
-    """미처리 행이 있으면 각 id 에 대해 process() 가 정확히 한 번씩 호출된다."""
-    repo = FakeRepo(pending=[1, 2, 3])
-    scanner, processed = _make_scanner(repo, monkeypatch)
-
-    await scanner.scan_once()
-
-    assert sorted(processed) == [1, 2, 3]
-
-
-async def test_scan_once_passes_correct_channels_and_max_attempts(monkeypatch):
-    """list_pending_call_ids 에 _REALTIME_CHANNELS 와 MAX_ATTEMPTS 가 전달된다."""
-    repo = FakeRepo(pending=[])
-    scanner, _ = _make_scanner(repo, monkeypatch)
-
-    await scanner.scan_once()
-
-    assert len(repo.list_calls) == 1
-    channels_arg, max_attempts_arg = repo.list_calls[0]
-    assert channels_arg == _REALTIME_CHANNELS
-    assert max_attempts_arg == MAX_ATTEMPTS
-
-
-async def test_scan_once_no_pending_does_nothing(monkeypatch):
-    """미처리 행이 없으면 process() 는 호출되지 않는다."""
-    repo = FakeRepo(pending=[])
-    scanner, processed = _make_scanner(repo, monkeypatch)
-
-    await scanner.scan_once()
-
-    assert processed == []
-
 
 async def test_scan_once_process_exception_does_not_abort_remaining(monkeypatch):
     """한 id 처리가 예외를 던져도 나머지 id 는 계속 처리된다."""
-    repo = FakeRepo(pending=[10, 20, 30])
+    repo = FakeScanRepo([10, 20, 30])
     processed: list[int] = []
 
-    async def flaky_process(call_history_id: int, **_kw) -> None:
+    async def flaky_process(call_history_id, repo=None):
         if call_history_id == 20:
             raise RuntimeError("boom")
         processed.append(call_history_id)
 
-    monkeypatch.setattr(catchup_mod, "process", flaky_process)
+    monkeypatch.setattr(catchup, "process", flaky_process)
     scanner = CatchupScanner(repo=repo)
 
-    await scanner.scan_once()  # 예외가 scan_once 밖으로 전파되지 않아야 한다
+    count = await scanner.scan_once()  # 예외가 scan_once 밖으로 전파되지 않아야 한다
 
     assert sorted(processed) == [10, 30]
+    assert count == 3  # 예외가 난 id 포함, 시도한 전체 건수를 반환
 
 
 async def test_scan_once_repo_exception_propagates(monkeypatch):
     """list_pending_call_ids 자체가 실패하면 예외가 호출자에게 전파된다."""
     processed: list[int] = []
 
-    async def spy_process(call_history_id: int, **_kw) -> None:  # pragma: no cover
+    async def spy_process(call_history_id, repo=None):  # pragma: no cover
         processed.append(call_history_id)
 
-    monkeypatch.setattr(catchup_mod, "process", spy_process)
+    monkeypatch.setattr(catchup, "process", spy_process)
 
     class BoomRepo:
         def list_pending_call_ids(self, channels, max_attempts):

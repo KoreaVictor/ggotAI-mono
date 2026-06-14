@@ -31,21 +31,24 @@ class CatchupScanner:
     def __init__(self, repo: OrderRepository | None = None) -> None:
         self._repo = repo or SupabaseOrderRepository()
 
-    async def scan_once(self) -> None:
+    async def scan_once(self) -> int:
         """is_processed=NULL && attempts < MAX_ATTEMPTS 인 행을 모두 처리한다.
 
         list_pending_call_ids 가 예외를 던지면 그대로 전파한다.
         개별 process() 예외는 흡수하고 나머지 id 처리를 계속한다.
+        처리한 id 수를 반환한다(미처리 행이 없으면 0).
         """
-        pending: list[int] = self._repo.list_pending_call_ids(
-            _REALTIME_CHANNELS, MAX_ATTEMPTS
+        ids = await asyncio.to_thread(
+            self._repo.list_pending_call_ids, _REALTIME_CHANNELS, MAX_ATTEMPTS
         )
-        if not pending:
-            return
+        if not ids:
+            return 0
 
-        logger.info("catch-up 스캔: 미처리 %d건", len(pending))
-        for call_history_id in pending:
+        logger.info("catch-up 스캔: 미처리 %s건 처리 시작", len(ids))
+        for call_history_id in ids:
             try:
-                await process(call_history_id)
+                await process(call_history_id, repo=self._repo)
             except Exception:  # noqa: BLE001
-                logger.exception("catch-up 처리 실패 id=%s — 계속", call_history_id)
+                logger.exception("catch-up 처리 실패 id=%s — 계속 진행", call_history_id)
+        logger.info("catch-up 스캔 완료: %s건", len(ids))
+        return len(ids)

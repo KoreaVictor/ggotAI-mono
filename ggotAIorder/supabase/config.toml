@@ -1,0 +1,8 @@
+project_id = "suylrznbctrkbxbleapb"
+
+# send-otp 은 로그인 전(가입/아이디찾기/비번찾기) 흐름이라 사용자 JWT 가 존재하지 않는다.
+# 신규 publishable 키는 JWT 형식이 아니어서 verify_jwt 게이트웨이를 통과하지 못한다.
+# 따라서 공개 엔드포인트로 두고, 남용 방지는 request_otp RPC 의 레이트리밋
+# (30초 재요청 쓰로틀 + 폰/용도별 시간당 5회 상한)으로 처리한다. 코드는 응답에 절대 싣지 않음.
+[functions.send-otp]
+verify_jwt = false

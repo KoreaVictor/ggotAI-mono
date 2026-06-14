@@ -1,0 +1,40 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ggotaiorder"
+version = "0.1.0"
+description = "ggotAIorder 백엔드 Windows Service 엔진"
+requires-python = ">=3.11"
+# 런타임 의존성 — src/ggotaiorder 의 실제 import 기준. 버전은 검증된 venv 하한.
+dependencies = [
+    "google-genai>=2.7.0",       # pipeline.extractor (Gemini 구조화 추출)
+    "supabase>=2.30.1",          # core.supabase_client
+    "python-dotenv>=1.2.2",      # config (.env 로딩)
+    "cryptography>=48.0.0",      # core.crypto (AES-256-CBC)
+    "pydantic>=2.13.4",          # pipeline.models 등 데이터 모델
+    "openpyxl>=3.1.5",           # rpa.backup (.xlsx 영수증)
+    "faster-whisper>=1.2.1",     # pipeline.stt (한국어 STT)
+    "fastapi>=0.136.3",          # api.routes (인입 Webhook)
+    "uvicorn>=0.48.0",           # api 서버 구동
+    "httpx>=0.28.1",             # notifier.provider (알림톡 HTTP 발송)
+    "APScheduler>=3.11.2",       # orchestrator (인트라넷 정기 폴링)
+    "pystray>=0.19.5",           # tray (트레이 아이콘)
+    "Pillow>=12.2.0",            # pystray 아이콘 이미지
+    "pywin32>=311; sys_platform == 'win32'",  # service (Windows 서비스)
+]
+
+[project.optional-dependencies]
+# 테스트 도구 — `pip install -e .[test]` 로 설치.
+test = [
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",     # asyncio_mode=auto (async 테스트)
+]
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"

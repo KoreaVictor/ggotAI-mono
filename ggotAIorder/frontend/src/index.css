@@ -1,0 +1,104 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+  --font-display: 'Outfit', sans-serif;
+
+  /* HSL 기반 하모니어스 프리미엄 다크 테마 컬러 */
+  --color-brand-bg: #07090E;
+  --color-brand-card: #0E131F;
+  --color-brand-card-hover: #161D2E;
+  --color-brand-border: #1E293B;
+  --color-brand-border-focus: #3B82F6;
+  --color-brand-primary: #3B82F6;
+  --color-brand-primary-hover: #2563EB;
+  --color-brand-success: #10B981;
+  --color-brand-error: #EF4444;
+  --color-brand-warning: #F59E0B;
+  
+  --color-brand-text-primary: #F8FAFC;
+  --color-brand-text-secondary: #94A3B8;
+  --color-brand-text-muted: #64748B;
+
+  /* 애니메이션 정의 */
+  --animate-neon-pulse: neon-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-fade-in-up: fade-in-up 0.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+
+  @keyframes neon-pulse {
+    0%, 100% {
+      opacity: 1;
+      filter: drop-shadow(0 0 6px currentColor);
+    }
+    50% {
+      opacity: 0.5;
+      filter: drop-shadow(0 0 2px currentColor);
+    }
+  }
+
+  @keyframes fade-in-up {
+    from {
+      opacity: 0;
+      transform: translateY(12px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+}
+
+/* 글로벌 리셋 및 테마 강제 설정 */
+html, body {
+  background-color: var(--color-brand-bg);
+  color: var(--color-brand-text-primary);
+  font-family: var(--font-sans);
+  margin: 0;
+  padding: 0;
+  overflow-x: hidden;
+  height: 100%;
+}
+
+#root {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Glassmorphism 특수 클래스 */
+.glass-panel {
+  background: rgba(14, 19, 31, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.glass-panel-hover {
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.glass-panel-hover:hover {
+  background: rgba(22, 29, 46, 0.85);
+  border-color: rgba(59, 130, 246, 0.3);
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.7);
+  transform: translateY(-2px);
+}
+
+/* 윈도우 스크롤바 프리미엄 커스텀 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--color-brand-bg);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--color-brand-border);
+  border-radius: 9999px;
+  transition: background 0.2s;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--color-brand-text-muted);
+}

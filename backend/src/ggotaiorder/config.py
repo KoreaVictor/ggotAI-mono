@@ -15,6 +15,7 @@ _REQUIRED_KEYS = (
     "SUPABASE_SERVICE_ROLE_KEY",
     "AES_ENCRYPTION_KEY",
     "GEMINI_API_KEY",
+    "SHOP_KEY",
 )
 
 
@@ -29,6 +30,7 @@ class Config:
     supabase_service_role_key: str
     aes_encryption_key: str
     gemini_api_key: str
+    shop_key: int
     rpa_backup_dir: Path
 
 
@@ -57,6 +59,11 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
             "AES_ENCRYPTION_KEY 는 hex 디코딩 시 정확히 32바이트(64 hex chars)여야 합니다."
         )
 
+    try:
+        shop_key = int(env["SHOP_KEY"])
+    except ValueError:
+        raise ConfigError("SHOP_KEY 는 정수여야 합니다.")
+
     backup_dir = env.get("RPA_BACKUP_DIR")
     rpa_backup_dir = (
         Path(backup_dir) if backup_dir
@@ -69,5 +76,6 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         supabase_service_role_key=env["SUPABASE_SERVICE_ROLE_KEY"],
         aes_encryption_key=aes_key,
         gemini_api_key=env["GEMINI_API_KEY"],
+        shop_key=shop_key,
         rpa_backup_dir=rpa_backup_dir,
     )

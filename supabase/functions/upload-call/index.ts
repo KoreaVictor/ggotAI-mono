@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveShopByDevicePhone } from "../_shared/resolveShop.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -39,19 +40,14 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 기기 인증 검증 (대표 핸드폰 번호로 가맹점 식별)
-    const { data: member, error: memberError } = await supabase
-      .from("member_info")
-      .select("id, shop_name, is_approved")
-      .eq("mobile_number", userPhoneNumber)
-      .maybeSingle();
+    const shop = await resolveShopByDevicePhone(supabase, userPhoneNumber);
 
-    if (memberError || !member || member.is_approved !== "Y") {
+    if (!shop) {
       return new Response(
         JSON.stringify({
           status: "error",
           error_code: "AUTH_ERR",
-          message: "등록되지 않거나 승인되지 않은 단말기입니다.",
+          message: "주문받는 핸드폰 번호로 등록되지 않은 기기입니다. 환경설정에서 등록해주세요.",
         }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -69,7 +65,7 @@ Deno.serve(async (req: Request) => {
     const { data: existingCall, error: checkError } = await supabase
       .from("server_call_history")
       .select("id")
-      .eq("shop_key", member.id)
+      .eq("shop_key", shop.shop_key)
       .eq("customer_phone_number", phoneNumber)
       .eq("call_date", callDate)
       .eq("call_time", callTime)
@@ -92,8 +88,8 @@ Deno.serve(async (req: Request) => {
     const { error: dbError } = await supabase.from("server_call_history").insert({
       channel_order: "핸드폰",
       channel_classification: userPhoneNumber,
-      shop_key: member.id,
-      shop_name: member.shop_name,
+      shop_key: shop.shop_key,
+      shop_name: shop.shop_name,
       customer_phone_number: phoneNumber,
       customer_name: customerName,
       call_date: callDate,
@@ -139,7 +135,7 @@ Deno.serve(async (req: Request) => {
         .from("server_call_history")
         .delete()
         .eq("audio_file_name", fileName)
-        .eq("shop_key", member.id);
+        .eq("shop_key", shop.shop_key);
       return new Response(
         JSON.stringify({
           status: "error",

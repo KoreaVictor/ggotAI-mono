@@ -1,6 +1,7 @@
 """전체 모듈 import 및 핵심 계약 스모크 테스트."""
 
 import importlib
+import sys
 
 import pytest
 
@@ -10,7 +11,6 @@ MODULES = [
     "ggotaiorder.core.crypto",
     "ggotaiorder.core.supabase_client",
     "ggotaiorder.orchestrator",
-    "ggotaiorder.tray",
     "ggotaiorder.api.routes",
     "ggotaiorder.realtime.listener",
     "ggotaiorder.pipeline.engine",
@@ -20,7 +20,21 @@ MODULES = [
 ]
 
 
-@pytest.mark.parametrize("mod", MODULES)
+@pytest.mark.parametrize(
+    "mod",
+    MODULES
+    + [
+        # tray는 Windows 전용(pystray 트레이 아이콘). 헤드리스 리눅스 CI엔 X 디스플레이가
+        # 없어 import 시 Xlib 오류 → win32에서만 검증.
+        pytest.param(
+            "ggotaiorder.tray",
+            marks=pytest.mark.skipif(
+                sys.platform != "win32",
+                reason="tray는 Windows 전용(pystray); 비-win32에선 디스플레이 없어 스킵",
+            ),
+        ),
+    ],
+)
 def test_module_imports(mod):
     importlib.import_module(mod)
 

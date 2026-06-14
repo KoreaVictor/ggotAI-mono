@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveShopByDevicePhone } from "../_shared/resolveShop.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,18 +32,14 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    const { data, error } = await supabase
-      .from("member_info")
-      .select("id, shop_name, representative_name, is_approved")
-      .eq("mobile_number", phone)
-      .maybeSingle();
+    const shop = await resolveShopByDevicePhone(supabase, phone);
 
-    if (error || !data || data.is_approved !== "Y") {
+    if (!shop) {
       return new Response(
         JSON.stringify({
           status: "error",
           error_code: "AUTH_ERR",
-          message: "등록되지 않거나 승인되지 않은 단말기입니다.",
+          message: "주문받는 핸드폰 번호로 등록되지 않은 기기입니다. 환경설정에서 등록해주세요.",
         }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -52,15 +49,16 @@ Deno.serve(async (req: Request) => {
       JSON.stringify({
         status: "success",
         data: {
-          shop_key: data.id,
-          shop_name: data.shop_name,
-          representative_name: data.representative_name,
-          is_approved: data.is_approved,
+          shop_key: shop.shop_key,
+          shop_name: shop.shop_name,
+          representative_name: shop.representative_name,
+          is_approved: shop.is_approved,
         },
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (_err) {
+  } catch (err) {
+    console.error("Unhandled exception:", err);
     return new Response(
       JSON.stringify({
         status: "error",

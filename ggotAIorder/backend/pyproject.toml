@@ -17,6 +17,7 @@ dependencies = [
     "openpyxl>=3.1.5",           # rpa.backup (.xlsx 영수증)
     "faster-whisper>=1.2.1",     # pipeline.stt (한국어 STT)
     "fastapi>=0.136.3",          # api.routes (인입 Webhook)
+    "python-multipart>=0.0.30",  # fastapi Form/multipart 엔드포인트(인입 webhook)
     "uvicorn>=0.48.0",           # api 서버 구동
     "httpx>=0.28.1",             # notifier.provider (알림톡 HTTP 발송)
     "APScheduler>=3.11.2",       # orchestrator (인트라넷 정기 폴링)

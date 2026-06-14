@@ -1,5 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveShopByDevicePhone } from "../_shared/resolveShop.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -30,19 +31,14 @@ Deno.serve(async (req: Request) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1단계: 기기 인증 및 승인 여부 검증 (대표 핸드폰 번호로 가맹점 식별)
-    const { data: member, error: memberError } = await supabase
-      .from("member_info")
-      .select("id, shop_name, is_approved")
-      .eq("mobile_number", userPhoneNumber)
-      .maybeSingle();
+    const shop = await resolveShopByDevicePhone(supabase, userPhoneNumber);
 
-    if (memberError || !member || member.is_approved !== "Y") {
+    if (!shop) {
       return new Response(
         JSON.stringify({
           status: "error",
           error_code: "AUTH_ERR",
-          message: "등록되지 않거나 승인되지 않은 단말기입니다.",
+          message: "주문받는 핸드폰 번호로 등록되지 않은 기기입니다. 환경설정에서 등록해주세요.",
         }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -55,7 +51,7 @@ Deno.serve(async (req: Request) => {
       .from("server_call_history")
       .delete({ count: "exact" })
       .eq("audio_file_name", audioFileName)
-      .eq("shop_key", member.id);
+      .eq("shop_key", shop.shop_key);
 
     console.log(`[Delete] DB 삭제 결과 - error: ${JSON.stringify(dbError)}, 삭제된 행 개수: ${count}`);
 

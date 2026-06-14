@@ -13,12 +13,9 @@ import logging
 from supabase import acreate_client
 
 from ggotaiorder.config import load_config
-from ggotaiorder.pipeline.engine import process
+from ggotaiorder.pipeline.engine import _REALTIME_CHANNELS, process
 
 logger = logging.getLogger(__name__)
-
-# Realtime이 직접 처리할 채널 (api/크롤러가 처리하는 채널은 제외)
-_REALTIME_CHANNELS = {"핸드폰", "가게음성"}
 
 
 class RealtimeListener:

@@ -28,7 +28,7 @@ class OrderRepository(Protocol):
     def increment_attempts(self, call_history_id: int) -> None: ...
 
     def list_pending_call_ids(
-        self, channels: set[str], max_attempts: int
+        self, channels: set[str], max_attempts: int, shop_key: int
     ) -> list[int]: ...
 
     def insert_order_details(self, payload: dict) -> int: ...
@@ -91,12 +91,13 @@ class SupabaseOrderRepository:
         ).eq("id", call_history_id).execute()
 
     def list_pending_call_ids(
-        self, channels: set[str], max_attempts: int
+        self, channels: set[str], max_attempts: int, shop_key: int
     ) -> list[int]:
         res = (
             get_client()
             .table("server_call_history")
             .select("id")
+            .eq("shop_key", shop_key)
             .in_("channel_order", list(channels))
             .is_("processed_at", "null")
             .lt("process_attempts", max_attempts)

@@ -25,26 +25,35 @@ class RealtimeListener:
     NotImplementedError) acreate_client 로 별도 async 클라이언트를 만들어 구독한다.
     """
 
-    def __init__(self) -> None:
+    def __init__(self, shop_key: int | None = None) -> None:
         self._client = None
         self._channel = None
         self._tasks: set[asyncio.Task] = set()
+        # None 이면 start() 에서 config 로부터 해석한다(테스트는 명시 주입).
+        self._shop_key = shop_key
 
     async def start(self) -> None:
         """Realtime 채널 구독을 시작한다."""
         cfg = load_config()
+        if self._shop_key is None:
+            self._shop_key = cfg.shop_key
         self._client = await acreate_client(
             cfg.supabase_url, cfg.supabase_service_role_key
         )
         self._channel = self._client.channel("server_call_history_inserts")
+        # 서버측 필터: 내 가게(shop_key) INSERT 만 푸시받는다(멀티샵 교차처리 차단).
         self._channel.on_postgres_changes(
             event="INSERT",
             schema="public",
             table="server_call_history",
+            filter=f"shop_key=eq.{self._shop_key}",
             callback=self._on_message,
         )
         await self._channel.subscribe()
-        logger.info("Realtime 구독 시작: server_call_history INSERT")
+        logger.info(
+            "Realtime 구독 시작: server_call_history INSERT (shop_key=%s)",
+            self._shop_key,
+        )
 
     async def stop(self) -> None:
         """구독을 해제하고 async 클라이언트 소켓을 닫는다."""
@@ -83,9 +92,18 @@ class RealtimeListener:
             )
 
     def _process_record(self, record: dict) -> None:
-        """채널이 핸드폰/가게음성이면 process(id)를 예약한다."""
+        """채널이 핸드폰/가게음성이고 내 가게(shop_key)면 process(id)를 예약한다."""
         channel = record.get("channel_order")
         call_history_id = record.get("id")
+        # 방어적 재확인: 서버측 필터가 어떤 이유로 적용 안 됐어도 남의 가게는 skip.
+        # (self._shop_key 가 None 이면 필터 미설정 — 단일샵 하위호환으로 전건 통과.)
+        if self._shop_key is not None and record.get("shop_key") != self._shop_key:
+            logger.debug(
+                "Realtime skip(타 shop): shop_key=%s id=%s",
+                record.get("shop_key"),
+                call_history_id,
+            )
+            return
         if channel in REALTIME_CHANNELS and call_history_id is not None:
             task = asyncio.create_task(process(call_history_id))
             self._tasks.add(task)

@@ -26,8 +26,8 @@ class FakeScanRepo:
         self._pending = pending
         self.queried: list[tuple] = []
 
-    def list_pending_call_ids(self, channels, max_attempts) -> list[int]:
-        self.queried.append((channels, max_attempts))
+    def list_pending_call_ids(self, channels, max_attempts, shop_key) -> list[int]:
+        self.queried.append((channels, max_attempts, shop_key))
         return list(self._pending)
 
 
@@ -48,14 +48,15 @@ async def test_scan_once_processes_each_pending(monkeypatch):
 
     monkeypatch.setattr(catchup, "process", fake_process)
 
-    scanner = CatchupScanner(repo=repo)
+    scanner = CatchupScanner(repo=repo, shop_key=19)
     count = await scanner.scan_once()
 
     assert processed == [10, 11, 12]
     assert count == 3
-    channels, max_attempts = repo.queried[0]
+    channels, max_attempts, shop_key = repo.queried[0]
     assert channels == engine.REALTIME_CHANNELS
     assert max_attempts == engine.MAX_ATTEMPTS
+    assert shop_key == 19
 
     # 주입한 repo 가 process 로 전달되는지 확인
     assert all(r is repo for r in repos_seen), "process 가 scanner 의 repo 를 받지 않았다"
@@ -70,7 +71,7 @@ async def test_scan_once_empty_returns_zero(monkeypatch):
 
     monkeypatch.setattr(catchup, "process", fake_process)
 
-    scanner = CatchupScanner(repo=repo)
+    scanner = CatchupScanner(repo=repo, shop_key=19)
     assert await scanner.scan_once() == 0
 
 
@@ -89,7 +90,7 @@ async def test_scan_once_process_exception_does_not_abort_remaining(monkeypatch)
         processed.append(call_history_id)
 
     monkeypatch.setattr(catchup, "process", flaky_process)
-    scanner = CatchupScanner(repo=repo)
+    scanner = CatchupScanner(repo=repo, shop_key=19)
 
     count = await scanner.scan_once()  # 예외가 scan_once 밖으로 전파되지 않아야 한다
 
@@ -107,10 +108,10 @@ async def test_scan_once_repo_exception_propagates(monkeypatch):
     monkeypatch.setattr(catchup, "process", spy_process)
 
     class BoomRepo:
-        def list_pending_call_ids(self, channels, max_attempts):
+        def list_pending_call_ids(self, channels, max_attempts, shop_key):
             raise RuntimeError("db down")
 
-    scanner = CatchupScanner(repo=BoomRepo())
+    scanner = CatchupScanner(repo=BoomRepo(), shop_key=19)
 
     with pytest.raises(RuntimeError, match="db down"):
         await scanner.scan_once()

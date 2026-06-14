@@ -10,6 +10,7 @@ VALID = {
     "SUPABASE_SERVICE_ROLE_KEY": "service-key",
     "AES_ENCRYPTION_KEY": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",  # 64 hex -> 32 bytes
     "GEMINI_API_KEY": "test-gemini-key",
+    "SHOP_KEY": "19",
 }
 
 
@@ -44,6 +45,25 @@ def test_empty_key_raises():
 
 def test_aes_key_must_be_32_bytes():
     broken = dict(VALID, AES_ENCRYPTION_KEY="0123456789abcdef")  # valid hex, 8 bytes
+    with pytest.raises(ConfigError):
+        load_config(env=broken)
+
+
+def test_shop_key_parsed_as_int():
+    cfg = load_config(env=VALID)
+    assert cfg.shop_key == 19
+    assert isinstance(cfg.shop_key, int)
+
+
+def test_missing_shop_key_raises():
+    broken = dict(VALID)
+    del broken["SHOP_KEY"]
+    with pytest.raises(ConfigError):
+        load_config(env=broken)
+
+
+def test_non_integer_shop_key_raises():
+    broken = dict(VALID, SHOP_KEY="abc")
     with pytest.raises(ConfigError):
         load_config(env=broken)
 

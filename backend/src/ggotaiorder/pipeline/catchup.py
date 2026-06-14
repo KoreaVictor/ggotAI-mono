@@ -28,18 +28,29 @@ class CatchupScanner:
         (테스트는 fake 주입).
     """
 
-    def __init__(self, repo: OrderRepository | None = None) -> None:
+    def __init__(
+        self, repo: OrderRepository | None = None, shop_key: int | None = None
+    ) -> None:
         self._repo = repo or SupabaseOrderRepository()
+        # None 이면 첫 scan_once() 에서 config 로부터 해석/캐시한다(테스트는 명시 주입).
+        self._shop_key = shop_key
 
     async def scan_once(self) -> int:
-        """processed_at=NULL && attempts < MAX_ATTEMPTS 인 행을 모두 처리한다.
+        """processed_at=NULL && attempts < MAX_ATTEMPTS 인 내 가게 행을 모두 처리한다.
 
         list_pending_call_ids 가 예외를 던지면 그대로 전파한다.
         개별 process() 예외는 흡수하고 나머지 id 처리를 계속한다.
         발견한(시도한) 미처리 건수를 반환한다(예외가 난 id 포함; 미처리 행이 없으면 0).
         """
+        if self._shop_key is None:
+            from ggotaiorder.config import load_config
+
+            self._shop_key = load_config().shop_key
         ids = await asyncio.to_thread(
-            self._repo.list_pending_call_ids, REALTIME_CHANNELS, MAX_ATTEMPTS
+            self._repo.list_pending_call_ids,
+            REALTIME_CHANNELS,
+            MAX_ATTEMPTS,
+            self._shop_key,
         )
         if not ids:
             return 0

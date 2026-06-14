@@ -56,7 +56,7 @@ class FakeOrderRepo:
     def increment_attempts(self, call_history_id):
         pass
 
-    def list_pending_call_ids(self, channels, max_attempts):
+    def list_pending_call_ids(self, channels, max_attempts, shop_key):
         return []
 
     def insert_order_details(self, payload):

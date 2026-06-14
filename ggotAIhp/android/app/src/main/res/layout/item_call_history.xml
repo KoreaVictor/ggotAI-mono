@@ -1,0 +1,168 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:layout_marginTop="6dp"
+    android:layout_marginBottom="6dp"
+    android:background="@drawable/bg_card_rounded"
+    android:elevation="1dp"
+    android:padding="16dp">
+
+    <!-- 좌측: 프로필 이니셜 아바타 영역 -->
+    <FrameLayout
+        android:id="@+id/avatarContainer"
+        android:layout_width="44dp"
+        android:layout_height="44dp"
+        android:background="@drawable/bg_avatar_circle"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <TextView
+            android:id="@+id/tvInitial"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center"
+            android:text="신"
+            android:textColor="@color/avatar_text"
+            android:textSize="15sp"
+            android:textStyle="bold" />
+    </FrameLayout>
+
+    <!-- 중앙: 통화 및 고객 상세 정보 영역 -->
+    <LinearLayout
+        android:id="@+id/infoContainer"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:layout_marginStart="14dp"
+        android:layout_marginEnd="12dp"
+        android:gravity="center_vertical"
+        app:layout_constraintStart_toEndOf="@id/avatarContainer"
+        app:layout_constraintEnd_toStartOf="@id/actionContainer"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- 고객명 및 통화시간(초) -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="bottom">
+
+            <TextView
+                android:id="@+id/tvCustomerName"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="부모님"
+                android:textColor="@color/text_primary"
+                android:textSize="16sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tvDuration"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text=" (37초)"
+                android:textColor="@color/text_secondary"
+                android:textSize="12sp"
+                android:layout_marginStart="4dp"/>
+        </LinearLayout>
+
+        <!-- 전화번호 -->
+        <TextView
+            android:id="@+id/tvPhoneNumber"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="055-582-8585"
+            android:textColor="@color/text_secondary"
+            android:textSize="13sp"
+            android:layout_marginTop="3dp" />
+
+        <!-- 통화 일시 -->
+        <TextView
+            android:id="@+id/tvCallDateTime"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="2026.05.22 · 20:12"
+            android:textColor="@color/text_secondary"
+            android:textSize="11sp"
+            android:layout_marginTop="4dp" />
+    </LinearLayout>
+
+    <!-- 우측: 알약 뱃지 및 재생 제어 버튼 영역 -->
+    <LinearLayout
+        android:id="@+id/actionContainer"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintTop_toTopOf="parent"
+        app:layout_constraintBottom_toBottomOf="parent">
+
+        <!-- 전송 상태 알약 뱃지 (Pill Badge) -->
+        <TextView
+            android:id="@+id/tvStatus"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="성공"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:paddingHorizontal="10dp"
+            android:paddingVertical="5dp"
+            android:background="@drawable/bg_badge_success"
+            android:textColor="@color/badge_success_text"
+            android:gravity="center"
+            android:layout_marginEnd="10dp"/>
+
+        <!-- 플레이 버튼 (동그란 플랫 재생 형태) -->
+        <FrameLayout
+            android:layout_width="36dp"
+            android:layout_height="36dp"
+            android:background="@drawable/bg_play_button_circle">
+
+            <ImageView
+                android:id="@+id/btnPlay"
+                android:layout_width="22dp"
+                android:layout_height="22dp"
+                android:layout_gravity="center"
+                android:src="@android:drawable/ic_media_play"
+                android:tint="@color/color_primary"
+                android:contentDescription="재생"
+                android:background="?selectableItemBackgroundBorderless"
+                android:clickable="true"
+                android:focusable="true"/>
+        </FrameLayout>
+
+    </LinearLayout>
+
+    <!-- 안드로이드 UI 호환을 위한 임시/숨김 뷰 (어댑터 내 기존 바인딩 변수들과의 무결성 보장) -->
+    <!-- 기존 adapter 및 view가 참조하던 레거시 ID들을 보존하되 layout_width=0dp로 숨겨 호환성을 유지합니다 -->
+    <TextView
+        android:id="@+id/tvNo"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <TextView
+        android:id="@+id/tvCallDate"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+    <TextView
+        android:id="@+id/tvCallTimeShort"
+        android:layout_width="0dp"
+        android:layout_height="0dp"
+        android:visibility="gone"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent"/>
+
+</androidx.constraintlayout.widget.ConstraintLayout>

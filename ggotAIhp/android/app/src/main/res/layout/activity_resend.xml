@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:padding="24dp"
+    android:background="@color/white"
+    android:minWidth="300dp">
+
+    <TextView
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="전송 실패 상세정보"
+        android:textSize="20sp"
+        android:textStyle="bold"
+        android:textColor="#212121"
+        android:gravity="center"
+        android:layout_marginBottom="16dp"/>
+
+    <TextView
+        android:id="@+id/tvTargetInfo"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="고객: 신규 (010-0000-0000)"
+        android:textSize="16sp"
+        android:textColor="#212121"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/tvCurrentStatus"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="현재 상태: 전송실패"
+        android:textSize="16sp"
+        android:textColor="#D50000"
+        android:layout_marginBottom="8dp"/>
+
+    <TextView
+        android:id="@+id/tvErrorLog"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="에러 로그: 서버 내부 오류가 발생했습니다."
+        android:textSize="14sp"
+        android:textColor="#757575"
+        android:layout_marginBottom="24dp"
+        android:minLines="2"/>
+
+    <Button
+        android:id="@+id/btnResend"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="재전송"
+        android:textSize="18sp"
+        android:padding="12dp"
+        android:backgroundTint="@color/purple_500"
+        android:textColor="@color/white"/>
+
+</LinearLayout>

@@ -112,7 +112,11 @@ async def process(call_history_id: int, repo: OrderRepository | None = None) -> 
 
 async def _process_inner(call_history_id: int, repo: OrderRepository) -> None:
     # 시도 횟수를 먼저 올린다(실패해도 카운트 → MAX_ATTEMPTS 상한이 적용됨).
-    await asyncio.to_thread(repo.increment_attempts, call_history_id)
+    try:
+        await asyncio.to_thread(repo.increment_attempts, call_history_id)
+    except Exception:
+        logger.exception("attempts 증가 실패 id=%s — 재시도 가능", call_history_id)
+        return
 
     try:
         row = await asyncio.to_thread(repo.get_call_history, call_history_id)
@@ -134,6 +138,8 @@ async def _process_inner(call_history_id: int, repo: OrderRepository) -> None:
             return
 
     try:
+        # 동기 Gemini 호출(재시도 time.sleep 포함)을 워커 스레드로 오프로드해
+        # asyncio 이벤트 루프를 블로킹하지 않는다.
         extraction = await asyncio.to_thread(extract_order, stt_text)
     except Exception:
         logger.exception("Gemini 추출 실패 id=%s", call_history_id)

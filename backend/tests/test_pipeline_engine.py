@@ -17,11 +17,14 @@ class FakeRepo:
     def update_stt_text(self, call_history_id: int, text: str) -> None:
         self.calls.append(("update_stt", call_history_id, text))
 
-    def mark_processed(self, call_history_id: int, value: str) -> None:
-        self.calls.append(("mark_processed", call_history_id, value))
+    def mark_processed(self, call_history_id: int, is_order: str) -> None:
+        self.calls.append(("mark_processed", call_history_id, is_order))
 
     def increment_attempts(self, call_history_id: int) -> None:
         self.calls.append(("increment_attempts", call_history_id))
+
+    def list_pending_call_ids(self, channels, max_attempts):
+        return []
 
     def insert_order_details(self, payload: dict) -> int:
         self.calls.append(("insert", payload))
@@ -204,5 +207,7 @@ async def test_in_flight_guard_dedups_concurrent(monkeypatch):
         engine.process(1, repo=repo), engine.process(1, repo=repo)
     )
 
+    increments = [c for c in repo.calls if c[0] == "increment_attempts"]
+    assert len(increments) == 1
     gets = [c for c in repo.calls if c[0] == "get"]
     assert len(gets) == 1

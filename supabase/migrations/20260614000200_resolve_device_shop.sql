@@ -31,6 +31,7 @@ as $$
       regexp_replace(coalesce(s.order_hp_2,''),'\D','','g')
         = regexp_replace(coalesce(p_phone,''),'\D','','g')
     )
+  order by m.id
   limit 1;
 $$;
 

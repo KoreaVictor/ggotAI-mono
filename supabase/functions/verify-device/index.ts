@@ -57,7 +57,8 @@ Deno.serve(async (req: Request) => {
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
-  } catch (_err) {
+  } catch (err) {
+    console.error("Unhandled exception:", err);
     return new Response(
       JSON.stringify({
         status: "error",

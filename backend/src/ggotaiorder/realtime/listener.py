@@ -13,12 +13,9 @@ import logging
 from supabase import acreate_client
 
 from ggotaiorder.config import load_config
-from ggotaiorder.pipeline.engine import process
+from ggotaiorder.pipeline.engine import REALTIME_CHANNELS, process
 
 logger = logging.getLogger(__name__)
-
-# Realtime이 직접 처리할 채널 (api/크롤러가 처리하는 채널은 제외)
-_REALTIME_CHANNELS = {"핸드폰", "가게음성"}
 
 
 class RealtimeListener:
@@ -89,7 +86,7 @@ class RealtimeListener:
         """채널이 핸드폰/가게음성이면 process(id)를 예약한다."""
         channel = record.get("channel_order")
         call_history_id = record.get("id")
-        if channel in _REALTIME_CHANNELS and call_history_id is not None:
+        if channel in REALTIME_CHANNELS and call_history_id is not None:
             task = asyncio.create_task(process(call_history_id))
             self._tasks.add(task)
             task.add_done_callback(self._on_task_done)

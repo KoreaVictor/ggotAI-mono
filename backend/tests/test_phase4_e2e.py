@@ -50,8 +50,14 @@ class FakeOrderRepo:
             channel_order=r["channel_order"],
         )
 
-    def set_is_order(self, call_history_id, value):
-        self.is_order = value
+    def mark_processed(self, call_history_id, is_order):
+        self.is_order = is_order
+
+    def increment_attempts(self, call_history_id):
+        pass
+
+    def list_pending_call_ids(self, channels, max_attempts):
+        return []
 
     def insert_order_details(self, payload):
         self.inserted_payload = payload

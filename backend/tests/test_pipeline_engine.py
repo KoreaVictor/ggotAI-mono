@@ -1,3 +1,5 @@
+import asyncio
+
 from ggotaiorder.pipeline import engine
 from ggotaiorder.pipeline.models import CallHistory, OrderExtraction
 
@@ -15,8 +17,14 @@ class FakeRepo:
     def update_stt_text(self, call_history_id: int, text: str) -> None:
         self.calls.append(("update_stt", call_history_id, text))
 
-    def set_is_order(self, call_history_id: int, value: str) -> None:
-        self.calls.append(("set_is_order", call_history_id, value))
+    def mark_processed(self, call_history_id: int, is_order: str) -> None:
+        self.calls.append(("mark_processed", call_history_id, is_order))
+
+    def increment_attempts(self, call_history_id: int) -> None:
+        self.calls.append(("increment_attempts", call_history_id))
+
+    def list_pending_call_ids(self, channels, max_attempts):
+        return []
 
     def insert_order_details(self, payload: dict) -> int:
         self.calls.append(("insert", payload))
@@ -58,7 +66,7 @@ async def test_order_path_inserts_and_enqueues(monkeypatch):
     await engine.process(1, repo=repo)
 
     kinds = [c[0] for c in repo.calls]
-    assert ("set_is_order", 1, "Y") in repo.calls
+    assert ("mark_processed", 1, "Y") in repo.calls
     assert "insert" in kinds
     assert enqueued == [999]
 
@@ -73,7 +81,7 @@ async def test_order_path_inserts_and_enqueues(monkeypatch):
 
 
 async def test_insert_failure_does_not_mark_is_order_Y(monkeypatch):
-    """INSERT가 실패하면 set_is_order('Y') 부분쓰기가 남지 않아야 한다."""
+    """INSERT가 실패하면 mark_processed('Y') 부분쓰기가 남지 않아야 한다."""
     repo = FakeRepo(_row())
 
     def boom(payload):
@@ -93,12 +101,12 @@ async def test_insert_failure_does_not_mark_is_order_Y(monkeypatch):
     await engine.process(1, repo=repo)
 
     # 주문 행 생성 실패 시 is_order='Y' 마킹과 enqueue 모두 일어나지 않아야 한다.
-    assert ("set_is_order", 1, "Y") not in repo.calls
+    assert ("mark_processed", 1, "Y") not in repo.calls
     assert enqueued == []
 
 
 async def test_order_path_marks_Y_after_successful_insert(monkeypatch):
-    """정상 경로에서 set_is_order('Y')는 INSERT 성공 이후에 호출돼야 한다."""
+    """정상 경로에서 mark_processed('Y')는 INSERT 성공 이후에 호출돼야 한다."""
     repo = FakeRepo(_row())
     monkeypatch.setattr(engine, "extract_order", lambda text: _full_extraction())
 
@@ -110,7 +118,7 @@ async def test_order_path_marks_Y_after_successful_insert(monkeypatch):
     await engine.process(1, repo=repo)
 
     kinds = [c[0] for c in repo.calls]
-    assert kinds.index("insert") < kinds.index("set_is_order")
+    assert kinds.index("insert") < kinds.index("mark_processed")
 
 
 async def test_non_order_path_sets_N_and_no_insert(monkeypatch):
@@ -121,7 +129,7 @@ async def test_non_order_path_sets_N_and_no_insert(monkeypatch):
     await engine.process(1, repo=repo)
 
     kinds = [c[0] for c in repo.calls]
-    assert ("set_is_order", 1, "N") in repo.calls
+    assert ("mark_processed", 1, "N") in repo.calls
     assert "insert" not in kinds
     assert ("delete_audio", "call_001.wav") in repo.calls
 
@@ -166,3 +174,40 @@ async def test_stt_failure_skips(monkeypatch):
     kinds = [c[0] for c in repo.calls]
     assert "insert" not in kinds
     assert called["extract"] is False
+
+
+async def test_increment_attempts_called_before_work(monkeypatch):
+    repo = FakeRepo(_row())
+    monkeypatch.setattr(engine, "extract_order", lambda t: _full_extraction())
+
+    async def fake_enqueue(order_id: int) -> None:
+        pass
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    kinds = [c[0] for c in repo.calls]
+    assert ("increment_attempts", 1) in repo.calls
+    # attempts 증가는 실제 작업(get) 이전에 일어나야 한다.
+    assert kinds.index("increment_attempts") < kinds.index("get")
+
+
+async def test_in_flight_guard_dedups_concurrent(monkeypatch):
+    """같은 id로 동시 process()가 들어와도 한 번만 처리(Realtime↔스캔 중복 방지)."""
+    repo = FakeRepo(_row())
+    monkeypatch.setattr(engine, "extract_order", lambda t: _full_extraction())
+
+    async def fake_enqueue(order_id: int) -> None:
+        pass
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await asyncio.gather(
+        engine.process(1, repo=repo), engine.process(1, repo=repo)
+    )
+
+    increments = [c for c in repo.calls if c[0] == "increment_attempts"]
+    assert len(increments) == 1
+    gets = [c for c in repo.calls if c[0] == "get"]
+    assert len(gets) == 1

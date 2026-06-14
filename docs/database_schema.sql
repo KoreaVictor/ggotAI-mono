@@ -35,6 +35,8 @@ CREATE TABLE IF NOT EXISTS server_call_history (
     audio_file_name VARCHAR(255) DEFAULT NULL,     -- 서버 스토리지에 저장된 음성 파일명
     stt_text TEXT DEFAULT NULL,                    -- Whisper가 변환한 비정형 주문 텍스트 원본 (스크래핑 원문)
     is_order CHAR(1) DEFAULT 'N',                  -- Gemini가 판별한 최종 주문 여부 ('Y' 또는 'N')
+    processed_at TIMESTAMP WITH TIME ZONE DEFAULT NULL, -- 파이프라인 종결(Y/N) 시각. NULL=미처리(catch-up 대상)
+    process_attempts INT NOT NULL DEFAULT 0,            -- 처리 시도 횟수(영구 실패 행의 무한 재시도 차단용)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
     FOREIGN KEY (shop_key) REFERENCES member_info(id) ON DELETE CASCADE
 );

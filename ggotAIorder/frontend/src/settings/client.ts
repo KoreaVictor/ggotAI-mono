@@ -4,6 +4,7 @@ export interface SettingsData {
   use_notification: string;
   notification_phone_number: string | null;
   rpa_success_message: string;
+  rpa_manual_message: string;
   rpa_fail_message: string;
   order_hp_1: string;
   order_hp_2: string | null;

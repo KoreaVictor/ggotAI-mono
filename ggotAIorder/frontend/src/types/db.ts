@@ -50,7 +50,7 @@ export interface OrderDetails {
   ribbon_sender: string | null;
   ribbon_congratulations: string | null;
   card_message: string | null;
-  rpa_status: 'ready' | 'success' | 'fail';
+  rpa_status: 'ready' | 'success' | 'manual' | 'fail';
   created_at: string;
 }
 

@@ -12,6 +12,7 @@ const DEFAULTS: SettingsData = {
   use_notification: 'Y',
   notification_phone_number: '',
   rpa_success_message: '{channel} 주문 {count}건 꽃가게 관리 프로그램에 입력 완료했습니다.',
+  rpa_manual_message: '[ggotAI] {channel} 주문 {count}건 접수 — 관리 프로그램에 직접 입력해 주세요.',
   rpa_fail_message: '[ggotAI 경고] {channel} 주문 자동 입력 실패! 수동 확인 바랍니다.',
   order_hp_1: '',
   order_hp_2: '',
@@ -287,12 +288,18 @@ export function SettingsView() {
                     value={settings.notification_phone_number ?? ''} onChange={handleInputChange}
                     className="w-full md:w-1/2 bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">RPA 전산 입력 성공 보고 문자 템플릿</label>
                     <textarea name="rpa_success_message" rows={3} value={settings.rpa_success_message} onChange={handleInputChange}
                       className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none resize-y" />
                     <span className="text-[10px] text-brand-text-muted mt-1.5 block">※ 변수 사용: `{'{channel}'}` (수집 채널명 치환), `{'{count}'}` (주문 개수 치환)</span>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">RPA 수동입력 필요 안내 문자 템플릿</label>
+                    <textarea name="rpa_manual_message" rows={3} value={settings.rpa_manual_message} onChange={handleInputChange}
+                      className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none resize-y" />
+                    <span className="text-[10px] text-brand-text-muted mt-1.5 block">※ 관리 프로그램 미구동 시 백업만 생성됨(수동입력 필요). 변수: `{'{channel}'}`, `{'{count}'}`</span>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">RPA 전산 입력 실패 경고 문자 템플릿</label>

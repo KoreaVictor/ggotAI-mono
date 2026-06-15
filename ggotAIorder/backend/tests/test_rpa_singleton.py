@@ -53,8 +53,8 @@ class FakeBackup:
 def _spy_notify():
     calls = []
 
-    async def notify(order, success):
-        calls.append((order.order_detail_id, success))
+    async def notify(order, outcome):
+        calls.append((order.order_detail_id, outcome))
 
     return calls, notify
 
@@ -70,10 +70,10 @@ async def test_program_running_input_success():
     assert autom.inputs == [7]
     assert backup.written == []
     assert repo.statuses == [(7, "success")]
-    assert calls == [(7, True)]
+    assert calls == [(7, "success")]
 
 
-async def test_program_running_input_fails_backs_up():
+async def test_program_running_input_fails_backs_up_as_fail():
     repo = FakeRepo(_order())
     autom = FakeAutomator(running=True, raises=True)
     backup = FakeBackup()
@@ -83,10 +83,10 @@ async def test_program_running_input_fails_backs_up():
 
     assert backup.written == [7]
     assert repo.statuses == [(7, "fail")]
-    assert calls == [(7, False)]
+    assert calls == [(7, "fail")]
 
 
-async def test_program_not_running_backs_up():
+async def test_program_not_running_backs_up_as_manual():
     repo = FakeRepo(_order())
     autom = FakeAutomator(running=False)
     backup = FakeBackup()
@@ -96,8 +96,8 @@ async def test_program_not_running_backs_up():
 
     assert autom.inputs == []
     assert backup.written == [7]
-    assert repo.statuses == [(7, "fail")]
-    assert calls == [(7, False)]
+    assert repo.statuses == [(7, "manual")]
+    assert calls == [(7, "manual")]
 
 
 async def test_missing_order_skips():

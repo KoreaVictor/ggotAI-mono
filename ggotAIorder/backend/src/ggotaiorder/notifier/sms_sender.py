@@ -27,16 +27,36 @@ def _mask(phone: str) -> str:
     return f"***{digits[-4:]}" if len(digits) >= 4 else "***"
 
 
+# RPA 처리 결과 → 알림 문구 매핑. 알 수 없는 값은 보수적으로 실패 문구로 폴백.
+_OUTCOME_SUCCESS = "success"
+_OUTCOME_MANUAL = "manual"
+_OUTCOME_FAIL = "fail"
+
+
+def _template_for(settings: "object", outcome: str) -> str:
+    """outcome(success/manual/fail)에 해당하는 알림 문구를 고른다."""
+    if outcome == _OUTCOME_SUCCESS:
+        return settings.rpa_success_message
+    if outcome == _OUTCOME_MANUAL:
+        return settings.rpa_manual_message
+    return settings.rpa_fail_message
+
+
 async def send(
     shop_key: int,
     channel: str,
     count: int,
-    success: bool,
+    outcome: str,
     *,
     repo: NotifierRepository | None = None,
     provider: NotificationProvider | None = None,
 ) -> bool:
-    """RPA 결과 알림을 발송한다. 실제 발송 시 True, 스킵/실패 시 False."""
+    """RPA 결과 알림을 발송한다.
+
+    outcome: 'success'(자동입력 성공) / 'manual'(백업 생성, 수동입력 필요) /
+    'fail'(자동입력 실패). 각각 rpa_success/manual/fail_message 로 발송한다.
+    실제 발송 시 True, 스킵/실패 시 False.
+    """
     repo = repo or SupabaseNotifierRepository()
     provider = provider or HttpNotificationProvider()
 
@@ -54,7 +74,7 @@ async def send(
         logger.warning("수신번호 없음 — 발송 스킵 shop_key=%s", shop_key)
         return False
 
-    template = settings.rpa_success_message if success else settings.rpa_fail_message
+    template = _template_for(settings, outcome)
     text = render_template(template, channel, count)
     if not text.strip():
         logger.warning("빈 메시지 — 발송 스킵 shop_key=%s", shop_key)
@@ -67,6 +87,6 @@ async def send(
         return False
 
     logger.info(
-        "알림 발송 성공 shop_key=%s to=%s success=%s", shop_key, _mask(recipient), success
+        "알림 발송 성공 shop_key=%s to=%s outcome=%s", shop_key, _mask(recipient), outcome
     )
     return True

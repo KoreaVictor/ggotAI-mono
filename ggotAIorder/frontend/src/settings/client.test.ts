@@ -7,7 +7,7 @@ function fakeRpc(data: unknown, error: unknown = null): DashRpc {
 }
 const SET: SettingsData = {
   use_notification: 'Y', notification_phone_number: null,
-  rpa_success_message: 's', rpa_fail_message: 'f',
+  rpa_success_message: 's', rpa_manual_message: 'm', rpa_fail_message: 'f',
   order_hp_1: '010-1', order_hp_2: null, order_landline_1: null, order_landline_2: null,
   shopping_mall_url: 'https://m', shopping_mall_id: 'mid', intranet_url: null, intranet_id: null,
   shopping_mall_check_interval: 15, intranet_check_interval: 40,

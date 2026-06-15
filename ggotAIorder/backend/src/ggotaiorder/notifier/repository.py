@@ -11,11 +11,18 @@ from ggotaiorder.core.supabase_client import get_client
 logger = logging.getLogger(__name__)
 
 
+# 백업(수동입력 필요) 알림 문구 기본값. setting_info.rpa_manual_message 가 비어 있을 때 사용.
+DEFAULT_MANUAL_MESSAGE = (
+    "[ggotAI] {channel} 주문 {count}건 접수 — 관리 프로그램에 직접 입력해 주세요."
+)
+
+
 @dataclass
 class NotificationSettings:
     use_notification: str
     notification_phone_number: Optional[str]
     rpa_success_message: str
+    rpa_manual_message: str
     rpa_fail_message: str
     fallback_mobile: Optional[str]
 
@@ -35,7 +42,7 @@ class SupabaseNotifierRepository:
             client.table("setting_info")
             .select(
                 "use_notification, notification_phone_number, "
-                "rpa_success_message, rpa_fail_message"
+                "rpa_success_message, rpa_manual_message, rpa_fail_message"
             )
             .eq("shop_key", shop_key)
             .limit(1)
@@ -58,6 +65,7 @@ class SupabaseNotifierRepository:
             use_notification=row.get("use_notification") or "N",
             notification_phone_number=row.get("notification_phone_number"),
             rpa_success_message=row.get("rpa_success_message") or "",
+            rpa_manual_message=row.get("rpa_manual_message") or DEFAULT_MANUAL_MESSAGE,
             rpa_fail_message=row.get("rpa_fail_message") or "",
             fallback_mobile=fallback_mobile,
         )

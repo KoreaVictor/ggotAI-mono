@@ -29,8 +29,11 @@ def parse_settings_row(row: dict | None, aes_key: str) -> RpaProgramSettings | N
     if pw_blob:
         try:
             login_password = decrypt(pw_blob, aes_key)
-        except Exception:
-            logger.warning("rpa_login_password 복호 실패 — 자격증명 없음으로 처리")
+        except Exception as exc:
+            logger.warning(
+                "rpa_login_password 복호 실패(%s) — 자격증명 없음으로 처리",
+                type(exc).__name__,
+            )
             login_password = None
     return RpaProgramSettings(
         program_type=(row.get("rpa_program_type") or "").strip(),
@@ -38,7 +41,8 @@ def parse_settings_row(row: dict | None, aes_key: str) -> RpaProgramSettings | N
         login_id=row.get("rpa_login_id") or None,
         login_password=login_password,
         enabled=(row.get("rpa_enabled") or "N") == "Y",
-        auto_submit=(row.get("rpa_auto_submit") or "Y") == "Y",
+        # 자동등록은 가장 공격적 동작 — 미설정/NULL이면 안전하게 끈다(DB 기본값 'Y'가 실제 기본).
+        auto_submit=(row.get("rpa_auto_submit") or "N") == "Y",
     )
 
 

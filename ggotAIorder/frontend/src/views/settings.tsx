@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { useSession } from '../session/SessionContext';
 import { getSettings, saveSettings, type SettingsData } from '../settings/client';
+import { nextRpaUrl } from '../settings/programDefaults';
 import type { DashRpc } from '../dashboard/client';
 import { encryptPassword } from '../utils/crypto';
 import { Save, Shield, Bell, Globe, Key, AlertTriangle, CheckCircle2, Lock } from 'lucide-react';
@@ -96,7 +97,17 @@ export function SettingsView() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setSettings((prev) => ({ ...prev, [name]: value }));
+    setSettings((prev) => {
+      // 프로그램 종류 변경 시 웹 주소 자동 채움(사용자 입력값은 보존)
+      if (name === 'rpa_program_type') {
+        return {
+          ...prev,
+          rpa_program_type: value,
+          rpa_program_url: nextRpaUrl(value, prev.rpa_program_url, prev.rpa_program_type),
+        };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {

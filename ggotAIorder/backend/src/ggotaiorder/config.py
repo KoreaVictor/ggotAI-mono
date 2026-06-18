@@ -32,6 +32,8 @@ class Config:
     gemini_api_key: str
     shop_key: int
     rpa_backup_dir: Path
+    rpa_profile_dir: Path
+    flowernt_debug_port: int
 
 
 def load_config(env: Mapping[str, str] | None = None) -> Config:
@@ -70,6 +72,15 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         else Path(__file__).resolve().parents[2] / "backups"
     )
 
+    profile_dir = env.get("RPA_PROFILE_DIR")
+    rpa_profile_dir = (
+        Path(profile_dir) if profile_dir else Path(r"C:\ggotAI\rpa_profile")
+    )
+    try:
+        flowernt_debug_port = int(env.get("RPA_DEBUG_PORT") or 9222)
+    except ValueError:
+        raise ConfigError("RPA_DEBUG_PORT 는 정수여야 합니다.")
+
     return Config(
         supabase_url=env["SUPABASE_URL"],
         supabase_anon_key=env["SUPABASE_ANON_KEY"],
@@ -78,4 +89,6 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         gemini_api_key=env["GEMINI_API_KEY"],
         shop_key=shop_key,
         rpa_backup_dir=rpa_backup_dir,
+        rpa_profile_dir=rpa_profile_dir,
+        flowernt_debug_port=flowernt_debug_port,
     )

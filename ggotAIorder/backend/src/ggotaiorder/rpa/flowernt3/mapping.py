@@ -25,8 +25,40 @@ DEFAULT_ORDER_DIVI = "기타"
 
 
 def channel_to_order_divi(channel: str | None) -> str:
-    """channel_order 값 → FlowerNT3 주문구분(order_divi) 라벨. 미상은 '기타'."""
+    """channel_order 값 → FlowerNT3 주문구분(order_divi) value. 미상은 '기타'."""
     return CHANNEL_TO_ORDER_DIVI.get((channel or "").strip(), DEFAULT_ORDER_DIVI)
+
+
+# 상품명 키워드 → 상품분류(sang_divi) 옵션 텍스트. 위에서부터 먼저 맞는 것을 택한다.
+# 실제 옵션(라이브): 축하화환/화분/쌀화환/근조화환/동양란/서양란/생화/과일바구니/축하오브제/근조오브제/기타.
+_SANG_DIVI_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
+    (("쌀화환", "쌀"), "쌀화환"),
+    (("근조오브제",), "근조오브제"),
+    (("축하오브제", "오브제"), "축하오브제"),
+    (("근조화환", "근조", "조화"), "근조화환"),
+    (("축하화환", "화환", "개업화환"), "축하화환"),
+    (("서양란", "서양", "호접", "심비디움"), "서양란"),
+    (("화분", "관엽", "식물"), "화분"),
+    (("과일", "과일바구니"), "과일바구니"),
+    (("꽃다발", "부케", "꽃바구니", "장미", "생화", "꽃", "바구니"), "생화"),
+)
+
+
+def product_to_sang_divi(product_name: str | None) -> str:
+    """상품명 → 상품분류(sang_divi) 옵션 텍스트. 매칭 없으면 '' (미선택).
+
+    키워드 휴리스틱이라 완벽하지 않다 — 라이브 운용하며 _SANG_DIVI_RULES를 보강한다.
+    """
+    n = (product_name or "").strip()
+    if not n:
+        return ""
+    # '동양란'은 '화분' 키워드보다 우선
+    if "동양란" in n or "동양" in n:
+        return "동양란"
+    for keywords, category in _SANG_DIVI_RULES:
+        if any(k in n for k in keywords):
+            return category
+    return ""
 
 
 def normalize_price(price: object) -> str:
@@ -66,7 +98,8 @@ def order_to_fields(order: RpaOrder) -> dict[str, str]:
         "customer_name": order.customer_name or "",
         "customer_hp": order.customer_phone_number or "",
         "sang_name": order.product_name or "",
-        "sang_money": normalize_price(order.price),
+        "sang_money": normalize_price(order.price),       # 소비정가
+        "sang_realMoney": normalize_price(order.price),   # 판매가 = 소비정가 동일
         "receive_name": order.receiver_name or "",
         "receive_hp": order.receiver_phone_number or "",
         "receive_address1": order.delivery_place or "",

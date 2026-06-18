@@ -39,6 +39,21 @@ def test_normalize_price_digits_only():
     assert m.normalize_price(50000.0) == "50000"  # float 자릿수 붕괴 방지
 
 
+def test_product_to_sang_divi():
+    assert m.product_to_sang_divi("장미 꽃다발") == "생화"
+    assert m.product_to_sang_divi("꽃바구니") == "생화"
+    assert m.product_to_sang_divi("축하화환 3단") == "축하화환"
+    assert m.product_to_sang_divi("근조화환") == "근조화환"
+    assert m.product_to_sang_divi("쌀화환 10kg") == "쌀화환"
+    assert m.product_to_sang_divi("동양란") == "동양란"
+    assert m.product_to_sang_divi("서양란 호접란") == "서양란"
+    assert m.product_to_sang_divi("관엽식물 화분") == "화분"
+    assert m.product_to_sang_divi("과일바구니") == "과일바구니"
+    assert m.product_to_sang_divi("축하 오브제") == "축하오브제"
+    assert m.product_to_sang_divi("") == ""
+    assert m.product_to_sang_divi("알수없는상품") == ""
+
+
 def test_split_delivery_datetime():
     assert m.split_delivery_datetime("2026-06-20T15:30:00") == ("2026-06-20", "15:30")
     assert m.split_delivery_datetime("2026-06-20 09:05") == ("2026-06-20", "09:05")
@@ -54,6 +69,7 @@ def test_order_to_fields():
     assert fields["customer_hp"] == "01011112222"
     assert fields["sang_name"] == "장미 꽃다발"
     assert fields["sang_money"] == "50000"
+    assert fields["sang_realMoney"] == "50000"   # 판매가 = 소비정가
     assert fields["receive_name"] == "김영희"
     assert fields["receive_hp"] == "01033334444"
     assert fields["receive_address1"] == "서울시 강남구 1-2"

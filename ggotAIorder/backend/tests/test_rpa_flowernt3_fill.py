@@ -42,6 +42,9 @@ def test_fill_order_form_populates_fields():
         val = lambda n: page.eval_on_selector(f"[name={n}]", "e=>e.value")
         assert val("customer_name") == "홍길동"
         assert val("sang_money") == "50000"
+        assert val("sang_realMoney") == "50000"  # 판매가 = 소비정가
+        # 상품분류: '장미' → 생화 (value '82626|생화')
+        assert page.eval_on_selector("select[name=sang_divi]", "e=>e.value") == "82626|생화"
         assert val("hope_date") == "2026-06-20"
         assert val("hope_time") == "15:30"
         assert val("receive_address1") == "서울 강남"

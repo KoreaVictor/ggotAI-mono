@@ -24,18 +24,24 @@ DEFAULT_ORDER_DIVI = "기타"
 
 
 def channel_to_order_divi(channel: str | None) -> str:
+    """channel_order 값 → FlowerNT3 주문구분(order_divi) 라벨. 미상은 '기타'."""
     return CHANNEL_TO_ORDER_DIVI.get((channel or "").strip(), DEFAULT_ORDER_DIVI)
 
 
 def normalize_price(price: object) -> str:
-    """숫자만 남긴 문자열. None/빈값은 ''."""
+    """숫자만 남긴 문자열. None/빈값은 ''. float는 자릿수 붕괴를 막으려 int로 절삭."""
     if price is None:
         return ""
+    if isinstance(price, float):
+        price = int(price)
     return re.sub(r"[^0-9]", "", str(price))
 
 
 def split_delivery_datetime(delivery_at: str | None) -> tuple[str, str]:
-    """ISO/공백구분 일시를 (YYYY-MM-DD, HH:MM)로 분리. 시각 없으면 ('date','')."""
+    """ISO/공백구분 일시를 (YYYY-MM-DD, HH:MM)로 분리. 시각 없으면 ('date','').
+
+    타임존 접미사(+09:00)는 폼이 현지시각 기준이라 버린다. 시·분이 비면 시각은 ''.
+    """
     if not delivery_at:
         return ("", "")
     s = str(delivery_at).strip().replace("T", " ")
@@ -44,13 +50,14 @@ def split_delivery_datetime(delivery_at: str | None) -> tuple[str, str]:
     time = ""
     if len(parts) > 1 and parts[1].strip():
         hm = parts[1].strip().split(":")
-        if len(hm) >= 2:
+        if len(hm) >= 2 and hm[0].strip() and hm[1].strip():
             time = f"{hm[0].zfill(2)}:{hm[1].zfill(2)}"
     return (date, time)
 
 
 def _ribbon_text(order: RpaOrder) -> str:
     """경조문구 + 보내는분을 합쳐 event_txt 한 칸에. 둘 다 없으면 ''."""
+    # 경조문구와 보내는분 사이 여백(라이브 폼 구분 규칙은 Task 9에서 최종 확인)
     parts = [p for p in (order.ribbon_congratulations, order.ribbon_sender) if p]
     return "  ".join(parts)
 

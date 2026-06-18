@@ -28,12 +28,14 @@ def test_channel_to_order_divi_known():
 def test_channel_to_order_divi_unknown_is_etc():
     assert m.channel_to_order_divi("") == "기타"
     assert m.channel_to_order_divi("알수없음") == "기타"
+    assert m.channel_to_order_divi(None) == "기타"
 
 
 def test_normalize_price_digits_only():
     assert m.normalize_price(50000) == "50000"
     assert m.normalize_price("50,000원") == "50000"
     assert m.normalize_price(None) == ""
+    assert m.normalize_price(50000.0) == "50000"  # float 자릿수 붕괴 방지
 
 
 def test_split_delivery_datetime():
@@ -41,6 +43,8 @@ def test_split_delivery_datetime():
     assert m.split_delivery_datetime("2026-06-20 09:05") == ("2026-06-20", "09:05")
     assert m.split_delivery_datetime("2026-06-20") == ("2026-06-20", "")
     assert m.split_delivery_datetime(None) == ("", "")
+    assert m.split_delivery_datetime("2026-06-20T::") == ("2026-06-20", "")  # garbage 시각
+    assert m.split_delivery_datetime("2026-06-20T09:05:00+09:00") == ("2026-06-20", "09:05")
 
 
 def test_order_to_fields():

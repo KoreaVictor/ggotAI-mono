@@ -150,8 +150,11 @@ async def test_default_automator_built_from_settings(monkeypatch):
     built = {}
     real_build = sm.build_automator
 
-    def fake_build(settings, *, debug_port):
-        a = real_build(settings, debug_port=debug_port)
+    def fake_build(settings, *, debug_port, profile_dir=None, chrome_path=None):
+        a = real_build(
+            settings, debug_port=debug_port,
+            profile_dir=profile_dir, chrome_path=chrome_path,
+        )
         built["type"] = type(a).__name__
         return a
 

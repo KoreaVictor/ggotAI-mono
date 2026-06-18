@@ -60,7 +60,12 @@ async def enqueue(
         settings = await asyncio.to_thread(
             load_program_settings, cfg.shop_key, cfg.aes_encryption_key
         )
-        automator = build_automator(settings, debug_port=cfg.flowernt_debug_port)
+        automator = build_automator(
+            settings,
+            debug_port=cfg.flowernt_debug_port,
+            profile_dir=str(cfg.rpa_profile_dir),
+            chrome_path=str(cfg.rpa_chrome_path),
+        )
     backup = backup or BackupWriter(cfg.rpa_backup_dir)
     notify = notify or _default_notify
 

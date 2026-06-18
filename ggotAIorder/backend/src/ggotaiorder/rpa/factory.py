@@ -9,7 +9,11 @@ from ggotaiorder.rpa.program_settings import RpaProgramSettings
 
 
 def build_automator(
-    settings: RpaProgramSettings | None, *, debug_port: int
+    settings: RpaProgramSettings | None,
+    *,
+    debug_port: int,
+    profile_dir: str | None = None,
+    chrome_path: str | None = None,
 ) -> ProgramAutomator:
     if settings is None or not settings.enabled:
         return ManualOnlyAutomator()
@@ -20,6 +24,8 @@ def build_automator(
             login_password=settings.login_password,
             auto_submit=settings.auto_submit,
             debug_port=debug_port,
+            profile_dir=profile_dir,
+            chrome_path=chrome_path,
         )
     if settings.program_type == "roseweb":
         return RoseWebAutomator(

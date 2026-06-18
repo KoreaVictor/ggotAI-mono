@@ -46,7 +46,7 @@ def test_fill_order_form_populates_fields():
         assert val("hope_time") == "15:30"
         assert val("receive_address1") == "서울 강남"
         checked = page.eval_on_selector(
-            "input[name=order_divi]:checked", "e=>e.parentElement.innerText.trim()")
-        assert "홈페이지" in checked
+            "input[name=order_divi]:checked", "e=>e.value")
+        assert checked == "인터넷"  # 채널 '쇼핑몰' → order_divi value '인터넷'
         assert page.title() == "REG_CALLED"
         browser.close()

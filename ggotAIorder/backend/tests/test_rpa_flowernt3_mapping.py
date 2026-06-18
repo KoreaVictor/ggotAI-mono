@@ -17,11 +17,12 @@ def _order(**kw):
 
 
 def test_channel_to_order_divi_known():
+    # FlowerNT3 order_divi 실제 value: 인터넷/전화/팩스/매장/프로그램간/기타
     assert m.channel_to_order_divi("전화") == "전화"
     assert m.channel_to_order_divi("가게전화") == "전화"
     assert m.channel_to_order_divi("핸드폰") == "전화"
-    assert m.channel_to_order_divi("가게음성") == "매장판매"
-    assert m.channel_to_order_divi("쇼핑몰") == "홈페이지"
+    assert m.channel_to_order_divi("가게음성") == "매장"
+    assert m.channel_to_order_divi("쇼핑몰") == "인터넷"
     assert m.channel_to_order_divi("인터라넷") == "프로그램간"
 
 
@@ -59,8 +60,8 @@ def test_order_to_fields():
     assert fields["hope_date"] == "2026-06-20"
     assert fields["hope_time"] == "15:30"
     assert fields["msg_text"] == "축하합니다"
-    assert "축 개업" in fields["event_txt"]
-    assert "홍길동" in fields["event_txt"]
+    assert fields["event_txt"] == "축 개업"      # 경조사명
+    assert fields["people_txt"] == "홍길동"      # 사람명(보내는분)
 
 
 def test_order_to_fields_omits_empty_optional():
@@ -71,6 +72,7 @@ def test_order_to_fields_omits_empty_optional():
     ))
     assert fields["receive_name"] == ""
     assert fields["event_txt"] == ""
+    assert fields["people_txt"] == ""
     assert fields["msg_text"] == ""
     assert "hope_date" not in fields
     assert "hope_time" not in fields

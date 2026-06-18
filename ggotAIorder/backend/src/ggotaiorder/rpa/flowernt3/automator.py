@@ -29,14 +29,13 @@ def fill_order_form(frame, order: RpaOrder, *, auto_submit: bool) -> None:
     auto_submit인데 submit_reg()를 찾지 못하면 RuntimeError를 던진다 — 무음으로
     'success' 처리되어 주문이 유실되는 것을 막기 위함(호출자가 백업+fail로 처리).
     """
-    # 1) 주문구분 라디오: 라벨 텍스트로 선택(인코딩 안전)
+    # 1) 주문구분 라디오: value 속성으로 선택(라이브 확인 — 라벨 텍스트 노드 없음, value에 한글)
     target = mapping.channel_to_order_divi(order.channel)
     frame.evaluate(
-        """(label) => {
+        """(val) => {
             const radios = Array.from(document.getElementsByName('order_divi'));
             for (const r of radios) {
-                const t = (r.parentElement?.innerText || '').trim();
-                if (t.includes(label)) { r.click(); return true; }
+                if (r.value === val) { r.click(); return true; }
             }
             return false;
         }""",

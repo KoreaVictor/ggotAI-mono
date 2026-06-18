@@ -10,14 +10,15 @@ import re
 
 from ggotaiorder.rpa.models import RpaOrder
 
-# channel(server_call_history.channel_order) → FlowerNT3 주문구분(order_divi) 라벨.
-# 정확한 라디오 라벨/순서는 라이브 폼에서 확정하되, 매핑 의도는 고정.
+# channel(server_call_history.channel_order) → FlowerNT3 주문구분(order_divi) value.
+# 라디오 실제 value(라이브 확인): 인터넷 / 전화 / 팩스 / 매장 / 프로그램간 / 기타.
+# fill_order_form은 이 value로 라디오를 선택한다.
 CHANNEL_TO_ORDER_DIVI = {
     "전화": "전화",
     "가게전화": "전화",
     "핸드폰": "전화",
-    "가게음성": "매장판매",
-    "쇼핑몰": "홈페이지",
+    "가게음성": "매장",
+    "쇼핑몰": "인터넷",
     "인터라넷": "프로그램간",
 }
 DEFAULT_ORDER_DIVI = "기타"
@@ -55,15 +56,12 @@ def split_delivery_datetime(delivery_at: str | None) -> tuple[str, str]:
     return (date, time)
 
 
-def _ribbon_text(order: RpaOrder) -> str:
-    """경조문구 + 보내는분을 합쳐 event_txt 한 칸에. 둘 다 없으면 ''."""
-    # 경조문구와 보내는분 사이 여백(라이브 폼 구분 규칙은 Task 9에서 최종 확인)
-    parts = [p for p in (order.ribbon_congratulations, order.ribbon_sender) if p]
-    return "  ".join(parts)
-
-
 def order_to_fields(order: RpaOrder) -> dict[str, str]:
-    """order_form2 의 text/textarea name → 값. (radio order_divi는 별도)"""
+    """order_form2 의 text/textarea name → 값. (radio order_divi는 별도)
+
+    리본 필드(라이브 확인): event_txt=경조사명(경조문구), people_txt=사람명(보내는분),
+    msg_text=카드메시지.
+    """
     fields: dict[str, str] = {
         "customer_name": order.customer_name or "",
         "customer_hp": order.customer_phone_number or "",
@@ -72,7 +70,8 @@ def order_to_fields(order: RpaOrder) -> dict[str, str]:
         "receive_name": order.receiver_name or "",
         "receive_hp": order.receiver_phone_number or "",
         "receive_address1": order.delivery_place or "",
-        "event_txt": _ribbon_text(order),
+        "event_txt": order.ribbon_congratulations or "",
+        "people_txt": order.ribbon_sender or "",
         "msg_text": order.card_message or "",
     }
     date, time = split_delivery_datetime(order.delivery_at)

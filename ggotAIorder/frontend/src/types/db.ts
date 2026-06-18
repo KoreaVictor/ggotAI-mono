@@ -60,6 +60,7 @@ export interface SettingInfo {
   use_notification: 'Y' | 'N';
   notification_phone_number: string | null;
   rpa_success_message: string;
+  rpa_manual_message: string | null;
   rpa_fail_message: string;
   order_hp_1: string;
   order_hp_2: string | null;
@@ -73,5 +74,11 @@ export interface SettingInfo {
   intranet_password: string | null;
   shopping_mall_check_interval: number;
   intranet_check_interval: number;
+  rpa_program_type: string | null;
+  rpa_program_url: string | null;
+  rpa_login_id: string | null;
+  rpa_login_password: string | null;
+  rpa_enabled: string | null;
+  rpa_auto_submit: string | null;
   created_at: string;
 }

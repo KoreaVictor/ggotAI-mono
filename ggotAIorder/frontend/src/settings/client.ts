@@ -18,6 +18,12 @@ export interface SettingsData {
   intranet_check_interval: number;
   has_shopping_mall_password: boolean;
   has_intranet_password: boolean;
+  rpa_program_type: string;
+  rpa_program_url: string | null;
+  rpa_login_id: string | null;
+  rpa_enabled: string;
+  rpa_auto_submit: string;
+  has_rpa_login_password: boolean;
 }
 
 export async function getSettings(
@@ -35,11 +41,13 @@ export async function saveSettings(
   settings: SettingsData,
   shoppingMallPassword: string | null,
   intranetPassword: string | null,
+  rpaLoginPassword: string | null,
 ): Promise<{ ok: boolean; reason?: string }> {
   const { data, error } = await rpc('save_settings', {
     p_shop_key: shopKey, p_token: token, p_settings: settings,
     p_shopping_mall_password: shoppingMallPassword,
     p_intranet_password: intranetPassword,
+    p_rpa_login_password: rpaLoginPassword,
   });
   if (error) return { ok: false, reason: 'error' };
   const d = data as { ok?: boolean; reason?: string } | null;

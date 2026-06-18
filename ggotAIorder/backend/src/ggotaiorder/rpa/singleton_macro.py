@@ -15,7 +15,9 @@ from collections.abc import Awaitable, Callable
 
 from ggotaiorder.config import load_config
 from ggotaiorder.notifier.sms_sender import send as notifier_send
-from ggotaiorder.rpa.automator import ProgramAutomator, WindowsProgramAutomator
+from ggotaiorder.rpa.automator import ProgramAutomator
+from ggotaiorder.rpa.factory import build_automator
+from ggotaiorder.rpa.program_settings import load_program_settings
 from ggotaiorder.rpa.backup import BackupWriter
 from ggotaiorder.rpa.models import RpaOrder
 from ggotaiorder.rpa.repository import RpaRepository, SupabaseRpaRepository
@@ -52,9 +54,14 @@ async def enqueue(
     - 프로그램 구동 중 입력 예외 → 백업 생성 → 'fail'(진짜 오류)
     완료 후 rpa_status 마킹 + 주문별 알림. 호출자 보호를 위해 전체를 try/except.
     """
+    cfg = load_config()
     repo = repo or SupabaseRpaRepository()
-    automator = automator or WindowsProgramAutomator()
-    backup = backup or BackupWriter(load_config().rpa_backup_dir)
+    if automator is None:
+        settings = await asyncio.to_thread(
+            load_program_settings, cfg.shop_key, cfg.aes_encryption_key
+        )
+        automator = build_automator(settings, debug_port=cfg.flowernt_debug_port)
+    backup = backup or BackupWriter(cfg.rpa_backup_dir)
     notify = notify or _default_notify
 
     try:

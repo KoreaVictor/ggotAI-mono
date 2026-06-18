@@ -139,3 +139,31 @@ async def test_singleton_lock_serializes():
     )
 
     assert active["max"] == 1   # 락으로 동시 실행 0 → 최대 동시 1
+
+
+async def test_default_automator_built_from_settings(monkeypatch):
+    import ggotaiorder.rpa.singleton_macro as sm
+
+    def fake_load(shop_key, aes_key):
+        return None  # → ManualOnly
+
+    built = {}
+    real_build = sm.build_automator
+
+    def fake_build(settings, *, debug_port):
+        a = real_build(settings, debug_port=debug_port)
+        built["type"] = type(a).__name__
+        return a
+
+    monkeypatch.setattr(sm, "load_program_settings", fake_load)
+    monkeypatch.setattr(sm, "build_automator", fake_build)
+
+    repo = FakeRepo(_order())
+    backup = FakeBackup()
+    calls, notify = _spy_notify()
+    # automator 미주입 → 팩토리 경로
+    await sm.enqueue(7, repo=repo, backup=backup, notify=notify)
+
+    assert built["type"] == "ManualOnlyAutomator"
+    assert repo.statuses == [(7, "manual")]
+    assert backup.written == [7]

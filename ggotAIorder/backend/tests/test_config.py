@@ -80,26 +80,17 @@ def test_rpa_backup_dir_override():
 
 
 def test_rpa_profile_dir_and_debug_port_defaults():
-    from pathlib import Path
-    env = {
-        "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a",
-        "SUPABASE_SERVICE_ROLE_KEY": "s",
-        "AES_ENCRYPTION_KEY": "0" * 64, "GEMINI_API_KEY": "g", "SHOP_KEY": "19",
-    }
-    from ggotaiorder.config import load_config
-    cfg = load_config(env)
+    cfg = load_config(env=VALID)
     assert isinstance(cfg.rpa_profile_dir, Path)
     assert cfg.flowernt_debug_port == 9222
 
 
 def test_rpa_profile_dir_and_port_from_env():
-    env = {
-        "SUPABASE_URL": "u", "SUPABASE_ANON_KEY": "a",
-        "SUPABASE_SERVICE_ROLE_KEY": "s",
-        "AES_ENCRYPTION_KEY": "0" * 64, "GEMINI_API_KEY": "g", "SHOP_KEY": "19",
-        "RPA_PROFILE_DIR": r"C:\tmp\prof", "RPA_DEBUG_PORT": "9333",
-    }
-    from ggotaiorder.config import load_config
-    cfg = load_config(env)
+    cfg = load_config(env=dict(VALID, RPA_PROFILE_DIR=r"C:\tmp\prof", RPA_DEBUG_PORT="9333"))
     assert str(cfg.rpa_profile_dir).endswith("prof")
     assert cfg.flowernt_debug_port == 9333
+
+
+def test_non_integer_debug_port_raises():
+    with pytest.raises(ConfigError):
+        load_config(env=dict(VALID, RPA_DEBUG_PORT="abc"))

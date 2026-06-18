@@ -73,6 +73,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
     )
 
     profile_dir = env.get("RPA_PROFILE_DIR")
+    # 단일 PC(Windows) 배포 기본값 — 가게마다 RPA 전용 Chrome 프로필을 이 경로에 둔다.
     rpa_profile_dir = (
         Path(profile_dir) if profile_dir else Path(r"C:\ggotAI\rpa_profile")
     )

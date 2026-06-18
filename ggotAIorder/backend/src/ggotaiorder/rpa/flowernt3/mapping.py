@@ -1,0 +1,76 @@
+"""RpaOrder → FlowerNT3 주문폼(order_form2) 순수 매핑.
+
+브라우저 의존성이 없어 단위테스트로 전부 검증한다. 실제 입력은 automator가
+이 dict를 받아 DOM에 채운다.
+"""
+
+from __future__ import annotations
+
+import re
+
+from ggotaiorder.rpa.models import RpaOrder
+
+# channel(server_call_history.channel_order) → FlowerNT3 주문구분(order_divi) 라벨.
+# 정확한 라디오 라벨/순서는 라이브 폼에서 확정하되, 매핑 의도는 고정.
+CHANNEL_TO_ORDER_DIVI = {
+    "전화": "전화",
+    "가게전화": "전화",
+    "핸드폰": "전화",
+    "가게음성": "매장판매",
+    "쇼핑몰": "홈페이지",
+    "인터라넷": "프로그램간",
+}
+DEFAULT_ORDER_DIVI = "기타"
+
+
+def channel_to_order_divi(channel: str | None) -> str:
+    return CHANNEL_TO_ORDER_DIVI.get((channel or "").strip(), DEFAULT_ORDER_DIVI)
+
+
+def normalize_price(price: object) -> str:
+    """숫자만 남긴 문자열. None/빈값은 ''."""
+    if price is None:
+        return ""
+    return re.sub(r"[^0-9]", "", str(price))
+
+
+def split_delivery_datetime(delivery_at: str | None) -> tuple[str, str]:
+    """ISO/공백구분 일시를 (YYYY-MM-DD, HH:MM)로 분리. 시각 없으면 ('date','')."""
+    if not delivery_at:
+        return ("", "")
+    s = str(delivery_at).strip().replace("T", " ")
+    parts = s.split(" ", 1)
+    date = parts[0]
+    time = ""
+    if len(parts) > 1 and parts[1].strip():
+        hm = parts[1].strip().split(":")
+        if len(hm) >= 2:
+            time = f"{hm[0].zfill(2)}:{hm[1].zfill(2)}"
+    return (date, time)
+
+
+def _ribbon_text(order: RpaOrder) -> str:
+    """경조문구 + 보내는분을 합쳐 event_txt 한 칸에. 둘 다 없으면 ''."""
+    parts = [p for p in (order.ribbon_congratulations, order.ribbon_sender) if p]
+    return "  ".join(parts)
+
+
+def order_to_fields(order: RpaOrder) -> dict[str, str]:
+    """order_form2 의 text/textarea name → 값. (radio order_divi는 별도)"""
+    fields: dict[str, str] = {
+        "customer_name": order.customer_name or "",
+        "customer_hp": order.customer_phone_number or "",
+        "sang_name": order.product_name or "",
+        "sang_money": normalize_price(order.price),
+        "receive_name": order.receiver_name or "",
+        "receive_hp": order.receiver_phone_number or "",
+        "receive_address1": order.delivery_place or "",
+        "event_txt": _ribbon_text(order),
+        "msg_text": order.card_message or "",
+    }
+    date, time = split_delivery_datetime(order.delivery_at)
+    if date:
+        fields["hope_date"] = date
+    if time:
+        fields["hope_time"] = time
+    return fields

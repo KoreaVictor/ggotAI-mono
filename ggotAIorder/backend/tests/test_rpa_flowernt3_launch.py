@@ -12,12 +12,12 @@ from pathlib import Path
 from ggotaiorder.rpa.flowernt3.automator import FlowerNt3Automator
 
 
-def _automator(tmp_path, chrome_exists=True):
+def _automator(tmp_path, chrome_exists=True, url="https://www.flowernt.com"):
     chrome = tmp_path / "chrome.exe"
     if chrome_exists:
         chrome.write_text("stub")
     return FlowerNt3Automator(
-        url="https://www.flowernt.com",
+        url=url,
         login_id="hable",
         login_password="pw",
         auto_submit=False,
@@ -55,6 +55,34 @@ def test_ensure_launches_when_cdp_down(tmp_path, monkeypatch):
     joined = " ".join(launched["args"])
     assert "--remote-debugging-port=9222" in joined
     assert "profile" in joined  # user-data-dir 에 프로필 경로 포함
+    # 웹기동 시 rpa_program_url(랜딩 URL)로 연다
+    assert "https://www.flowernt.com" in launched["args"]
+
+
+def test_launch_opens_program_url(tmp_path, monkeypatch):
+    landing = "https://www.flowernt.com/main.asp?checkintro=Y"
+    a = _automator(tmp_path, url=landing)
+    states = iter([False, True])
+    monkeypatch.setattr(a, "_cdp_alive", lambda: next(states))
+    launched = {"args": None}
+    monkeypatch.setattr(
+        "subprocess.Popen",
+        lambda args, *x, **k: launched.__setitem__("args", args),
+    )
+    monkeypatch.setattr("time.sleep", lambda *_: None)
+    a._ensure_browser_running()
+    assert landing in launched["args"]  # DB의 rpa_program_url 그대로 기동
+
+
+def test_order_url_uses_origin_not_landing_path(tmp_path):
+    # rpa_program_url 에 경로·쿼리가 있어도 주문폼 URL은 origin 기준으로 만든다
+    a = _automator(tmp_path, url="https://www.flowernt.com/main.asp?checkintro=Y")
+    assert a._order_url() == "https://www.flowernt.com/order/order3.asp"
+
+
+def test_order_url_with_plain_domain(tmp_path):
+    a = _automator(tmp_path, url="https://www.flowernt.com")
+    assert a._order_url() == "https://www.flowernt.com/order/order3.asp"
 
 
 def test_ensure_false_when_chrome_missing(tmp_path, monkeypatch):

@@ -9,6 +9,8 @@ $ErrorActionPreference = "Stop"
 $chrome      = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $profileDir  = "C:\ggotAI\rpa_profile"
 $debugPort   = 9222
+# 사전기동 시 열 랜딩 URL(FlowerNT3). 실제 주문 시엔 백엔드가 DB의 rpa_program_url로 구동한다.
+$landingUrl  = "https://www.flowernt.com/main.asp?checkintro=Y"
 
 try {
     if (-not (Test-Path $chrome)) {
@@ -35,7 +37,7 @@ try {
         ("--user-data-dir={0}" -f $profileDir),
         "--no-first-run",
         "--no-default-browser-check",
-        "--restore-last-session"
+        $landingUrl
     )
     Start-Process -FilePath $chrome -ArgumentList $args | Out-Null
 

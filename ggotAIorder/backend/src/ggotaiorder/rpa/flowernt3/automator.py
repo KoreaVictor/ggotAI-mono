@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import logging
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from ggotaiorder.rpa.flowernt3 import mapping
 from ggotaiorder.rpa.models import RpaOrder
@@ -99,6 +100,13 @@ class FlowerNt3Automator:
         self.profile_dir = profile_dir
         self.chrome_path = chrome_path
 
+    def _order_url(self) -> str:
+        """주문폼 URL. rpa_program_url에 경로·쿼리(main.asp?checkintro=Y 등)가
+        있어도 origin(scheme+host)만 뽑아 ORDER_PATH를 붙인다."""
+        parts = urlsplit(self.url)
+        origin = f"{parts.scheme}://{parts.netloc}" if parts.netloc else self.url
+        return origin + ORDER_PATH
+
     # --- 세션 ---
     def _connect(self, p):
         return p.chromium.connect_over_cdp(_cdp_url(self.debug_port))
@@ -138,7 +146,8 @@ class FlowerNt3Automator:
             f"--user-data-dir={self.profile_dir}",
             "--no-first-run",
             "--no-default-browser-check",
-            "--restore-last-session",
+            # 웹기동 시 DB의 rpa_program_url(랜딩 URL)로 직접 연다(프로그램별 상이).
+            self.url,
         ]
         try:
             subprocess.Popen(args)  # noqa: S603 - 고정 인자, 사용자 입력 없음
@@ -229,7 +238,7 @@ class FlowerNt3Automator:
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
                 page.on("dialog", lambda d: d.accept())
                 # 주문입력 프레임을 신규폼으로 새로고침(if/else 모두 재조회 후 폴백)
-                order_url = self.url.rstrip("/") + ORDER_PATH
+                order_url = self._order_url()
                 frame = self._order_frame(page)
                 if frame is not None:
                     frame.goto(order_url, wait_until="domcontentloaded")

@@ -77,9 +77,15 @@ class FlowerNt3Automator:
         return p.chromium.connect_over_cdp(_cdp_url(self.debug_port))
 
     def _logged_in(self, page) -> bool:
-        """로그인 페이지로 튕기지 않으면 로그인 상태로 간주."""
-        url = (page.url or "").lower()
-        return "login" not in url and "flowernt.com" in url
+        """어느 프레임에도 로그인 폼(login.asp)이 없으면 로그인 상태로 간주.
+
+        FlowerNT3는 프레임셋이라 최상위 URL은 로그아웃 시에도 main.asp로 남는다.
+        따라서 자식 프레임 중 login.asp 존재 여부로 판정한다.
+        """
+        for f in page.frames:
+            if "login.asp" in (f.url or "").lower():
+                return False
+        return "flowernt.com" in (page.url or "").lower()
 
     def _order_frame(self, page):
         for f in page.frames:
@@ -112,12 +118,19 @@ class FlowerNt3Automator:
             return False
         try:
             page.goto(self.url, wait_until="domcontentloaded")
-            # FlowerNT 로그인 폼 필드명은 라이브에서 확정(후속). 가능한 후보 시도.
-            page.fill("input[name=member_id], input[name=user_id], input[name=id]",
-                      self.login_id)
-            page.fill("input[type=password]", self.login_password)
-            page.keyboard.press("Enter")
-            page.wait_for_load_state("domcontentloaded")
+            page.wait_for_timeout(500)
+            # 로그인 폼(ms_id/ms_pass)은 프레임 안에 있을 수 있어 전 프레임을 탐색.
+            for fr in page.frames:
+                id_el = fr.query_selector("input[name=ms_id]")
+                pw_el = fr.query_selector("input[name=ms_pass]")
+                if id_el and pw_el:
+                    id_el.fill(self.login_id)
+                    pw_el.fill(self.login_password)
+                    pw_el.press("Enter")
+                    page.wait_for_load_state("domcontentloaded")
+                    page.wait_for_timeout(800)
+                    return self._logged_in(page)
+            # 로그인 폼을 못 찾았으면 이미 로그인 상태일 수 있음
             return self._logged_in(page)
         except Exception:
             logger.warning("FlowerNT3 자동 로그인 실패")

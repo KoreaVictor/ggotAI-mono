@@ -20,7 +20,8 @@ ORDER_PATH = "/order/order3.asp"
 
 
 def _cdp_url(debug_port: int) -> str:
-    return f"http://localhost:{debug_port}"
+    # localhost는 ::1(IPv6)로 풀려 CDP 연결이 거부될 수 있어 127.0.0.1로 고정.
+    return f"http://127.0.0.1:{debug_port}"
 
 
 def fill_order_form(frame, order: RpaOrder, *, auto_submit: bool) -> None:
@@ -41,7 +42,7 @@ def fill_order_form(frame, order: RpaOrder, *, auto_submit: bool) -> None:
         }""",
         target,
     )
-    # 2) text/textarea 채움
+    # 2) text/textarea 채움. 읽기전용(달력 등) 필드는 fill()이 막히므로 JS로 값+이벤트 주입.
     for name, value in mapping.order_to_fields(order).items():
         if value == "":
             continue
@@ -49,7 +50,20 @@ def fill_order_form(frame, order: RpaOrder, *, auto_submit: bool) -> None:
         if el is None:
             logger.debug("FlowerNT3 필드 없음(스킵): %s", name)
             continue
-        el.fill(value)
+        editable = el.evaluate("e => !e.readOnly && !e.disabled")
+        if editable:
+            el.fill(value)
+        else:
+            frame.evaluate(
+                """([name, val]) => {
+                    const e = document.getElementsByName(name)[0];
+                    if (!e) return;
+                    e.value = val;
+                    e.dispatchEvent(new Event('input', { bubbles: true }));
+                    e.dispatchEvent(new Event('change', { bubbles: true }));
+                }""",
+                [name, value],
+            )
     # 3) 등록 — submit_reg 호출 여부를 반환받아 미발견 시 실패로 간주
     if auto_submit:
         called = frame.evaluate(

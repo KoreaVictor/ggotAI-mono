@@ -81,6 +81,7 @@ class CallSyncWorker(
                 audioFileName = audioFileName,
                 audioFilePath = recordFilePath ?: "",
                 durationSeconds = durationSeconds,
+                callType = callLog?.type,
                 syncStatus = 0
             )
 

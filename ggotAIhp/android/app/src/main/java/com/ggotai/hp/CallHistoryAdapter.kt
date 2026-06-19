@@ -54,13 +54,13 @@ class CallHistoryAdapter(private var historyList: List<CallHistory>) :
         holder.tvNo.text = (position + 1).toString()
         holder.tvCustomerName.text = item.customerName
         
-        // 프로필 이니셜 아바타 텍스트 바인딩
-        val firstChar = if (!item.customerName.isNullOrEmpty()) {
-            item.customerName.substring(0, 1)
-        } else {
-            "신"
+        // 좌측 아바타에 수신/발신 종류 표시 (발신='발', 그 외 수신·부재중 등='수')
+        // callType이 없는 레거시 행은 기존처럼 고객명 첫 글자로 대체한다.
+        holder.tvInitial.text = when (item.callType) {
+            null -> if (!item.customerName.isNullOrEmpty()) item.customerName.substring(0, 1) else "신"
+            android.provider.CallLog.Calls.OUTGOING_TYPE -> "발"
+            else -> "수"
         }
-        holder.tvInitial.text = firstChar
         
         val timeParts = item.callTime.split(":")
         

@@ -16,6 +16,8 @@ data class CallHistory(
     @ColumnInfo(name = "audio_file_name") val audioFileName: String,
     @ColumnInfo(name = "audio_file_path") val audioFilePath: String,
     @ColumnInfo(name = "duration_seconds") val durationSeconds: Int? = null,
+    // 통화 종류: Android CallLog.Calls.TYPE 값 (1=수신, 2=발신, 3=부재중 …). 레거시 행은 null.
+    @ColumnInfo(name = "call_type") val callType: Int? = null,
     @ColumnInfo(name = "error_code") var errorCode: String? = null,
     @ColumnInfo(name = "error_message") var errorMessage: String? = null,
     @ColumnInfo(name = "sync_status") var syncStatus: Int = 0,

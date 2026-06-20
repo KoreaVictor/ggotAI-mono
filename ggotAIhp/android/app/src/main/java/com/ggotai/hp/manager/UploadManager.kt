@@ -66,7 +66,7 @@ object UploadManager {
      * 통화 직후 즉시 업로드. 최대 3회 재시도하고, 최종 실패 시 '실패' 처리 + TTS 알림.
      * (워커가 아닌 즉시 경로 전용)
      */
-    suspend fun uploadCallHistory(context: Context, historyId: Int) {
+    suspend fun uploadCallHistory(context: Context, historyId: Int, successMessage: String? = null) {
         withContext(Dispatchers.IO) {
             val db = AppDatabase.getDatabase(context)
             val dao = db.callHistoryDao()
@@ -104,6 +104,10 @@ object UploadManager {
                     attempt++
                     if (attempt < MAX_RETRIES) delay(RETRY_DELAY_MS)
                 }
+            }
+
+            if (success && successMessage != null) {
+                speakOrQueue(successMessage, "StoreSaleSuccess")
             }
 
             if (!success) {

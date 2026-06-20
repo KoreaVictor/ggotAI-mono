@@ -7,7 +7,7 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [CallHistory::class], version = 3, exportSchema = false)
+@Database(entities = [CallHistory::class], version = 4, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun callHistoryDao(): CallHistoryDao
@@ -30,6 +30,13 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v3 → v4: channel_order 컬럼 추가 (매장판매=가게음성 구분, 기존 행은 '핸드폰'). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE call_history ADD COLUMN channel_order TEXT NOT NULL DEFAULT '핸드폰'")
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -37,7 +44,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "ggotai_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                 INSTANCE = instance
                 instance

@@ -62,6 +62,7 @@ interface ApiService {
         @retrofit2.http.Part("call_date") callDate: okhttp3.RequestBody,
         @retrofit2.http.Part("call_time") callTime: okhttp3.RequestBody,
         @retrofit2.http.Part("duration_seconds") durationSeconds: okhttp3.RequestBody,
+        @retrofit2.http.Part("channel_order") channelOrder: okhttp3.RequestBody,
         @retrofit2.http.Part audioFile: okhttp3.MultipartBody.Part
     ): Response<UploadCallResponse>
 

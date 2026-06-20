@@ -155,12 +155,13 @@ object UploadManager {
             val dateRb = history.callDate.toRequestBody("text/plain".toMediaTypeOrNull())
             val timeRb = history.callTime.toRequestBody("text/plain".toMediaTypeOrNull())
             val durationRb = (history.durationSeconds?.toString() ?: "0").toRequestBody("text/plain".toMediaTypeOrNull())
+            val channelRb = history.channelOrder.toRequestBody("text/plain".toMediaTypeOrNull())
 
             val reqFile = file.asRequestBody("audio/mpeg".toMediaTypeOrNull())
             val audioPart = MultipartBody.Part.createFormData("audio_file", file.name, reqFile)
 
             val response = RetrofitClient.instance.uploadCall(
-                userPhoneRb, phoneRb, nameRb, dateRb, timeRb, durationRb, audioPart
+                userPhoneRb, phoneRb, nameRb, dateRb, timeRb, durationRb, channelRb, audioPart
             )
 
             if (response.isSuccessful && response.body()?.status == "success") {

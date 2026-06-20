@@ -10,28 +10,16 @@ import { SignupView } from './views/signup';
 import { DashboardView } from './views/dashboard';
 import { OrderListView } from './views/order_list';
 import { SettingsView } from './views/settings';
-import type { ServiceStatus } from './types/electron';
+import { useEngineStatus } from './dashboard/useEngineStatus';
 import type { Route } from './shell/routes';
 
 function Shell() {
-  const { session, authReady, logout } = useSession();
+  const { session, authReady, logout, readToken } = useSession();
   const [route, setRoute] = useState<Route>('home');
-  const [serviceStatus, setServiceStatus] = useState<ServiceStatus | 'LOADING'>('LOADING');
 
-  // 서비스 상태 폴링(헤더 뱃지)
-  useEffect(() => {
-    let active = true;
-    const check = async () => {
-      if (!window.electronAPI) { if (active) setServiceStatus('STOPPED'); return; }
-      try {
-        const res = await window.electronAPI.getServiceStatus();
-        if (active) setServiceStatus(res.status);
-      } catch { if (active) setServiceStatus('STOPPED'); }
-    };
-    check();
-    const t = setInterval(check, 3000);
-    return () => { active = false; clearInterval(t); };
-  }, []);
+  // 헤더 배지 = 상황판과 동일한 하트비트 신호(get_dashboard.engine_alive).
+  // 웹·데스크톱 공통으로 실제 수집엔진 가동 여부를 표시한다.
+  const serviceStatus = useEngineStatus(session?.shopKey ?? 0, readToken);
 
   // 로그인/로그아웃 "전환" 시에만 기본 라우트 보정.
   // (session 객체 자체가 갱신돼도 — 예: 마이페이지 shop_name 변경 — 라우트를 튕기지 않도록 로그인 여부 불리언에 의존)

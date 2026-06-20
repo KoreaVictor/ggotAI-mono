@@ -12,6 +12,8 @@ import uvicorn
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
 from ggotaiorder.api.routes import create_app
+from ggotaiorder.config import load_config
+from ggotaiorder.core.heartbeat import record_heartbeat
 from ggotaiorder.pipeline.catchup import CatchupScanner
 from ggotaiorder.realtime.listener import RealtimeListener
 from ggotaiorder.scraper.crawler import poll_once
@@ -24,6 +26,9 @@ _DEFAULT_INTRANET_INTERVAL_MIN = 30
 # catch-up 스캔 주기(분). 부팅 1회 후 이 간격으로 미처리분을 따라잡는다.
 _CATCHUP_INTERVAL_MIN = 30
 
+# 하트비트 주기(초). 상황판은 최근 90초 내 신호로 '가동중'을 판정한다(get_dashboard).
+_HEARTBEAT_INTERVAL_SEC = 20
+
 
 class Orchestrator:
     """모든 백엔드 서브시스템의 수명주기를 관리한다."""
@@ -32,6 +37,7 @@ class Orchestrator:
         self._host = host
         self._port = port
         self._paused = False
+        self._shop_key: int | None = None  # start() 시점에 로딩(테스트는 start 미호출)
         self._listener = RealtimeListener()
         self._scanner = CatchupScanner()
         self._scheduler = AsyncIOScheduler()
@@ -68,9 +74,20 @@ class Orchestrator:
         except Exception:
             logger.exception("catch-up 스캔 실패(다음 주기에 재시도)")
 
+    async def _heartbeat(self) -> None:
+        """수집엔진 생존 신호를 기록한다(paused 와 무관 — 프로세스 생존이 기준)."""
+        if self._shop_key is None:
+            return
+        try:
+            record_heartbeat(self._shop_key)
+        except Exception:
+            logger.exception("하트비트 기록 실패(다음 주기 재시도)")
+
     async def start(self) -> None:
         """모든 서브시스템을 기동하고 종료될 때까지 대기한다."""
         logger.info("오케스트레이터 시작")
+
+        self._shop_key = load_config().shop_key
 
         await self._listener.start()
 
@@ -93,6 +110,16 @@ class Orchestrator:
             "interval",
             minutes=_CATCHUP_INTERVAL_MIN,
             id="catchup_scan",
+            max_instances=1,
+            coalesce=True,
+        )
+        # 하트비트: 기동 직후 1회 + 주기적으로. 상황판 '가동중' 표시의 근거.
+        self._scheduler.add_job(self._heartbeat, "date", id="heartbeat_boot")
+        self._scheduler.add_job(
+            self._heartbeat,
+            "interval",
+            seconds=_HEARTBEAT_INTERVAL_SEC,
+            id="heartbeat",
             max_instances=1,
             coalesce=True,
         )

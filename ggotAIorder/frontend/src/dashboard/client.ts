@@ -8,14 +8,14 @@ export interface FeedRow {
   id: number; channel_order: string; customer_name: string | null;
   stt_text: string | null; is_order: string | null; rpa_status: string | null; created_at: string;
 }
-export interface DashboardData { stats: Stats; channels: ChannelAgg[]; config: Config; feed: FeedRow[]; }
+export interface DashboardData { stats: Stats; channels: ChannelAgg[]; config: Config; feed: FeedRow[]; engineAlive: boolean; }
 
 export async function getDashboard(
   rpc: DashRpc, shopKey: number, token: string,
 ): Promise<{ ok: boolean; data?: DashboardData; reason?: string }> {
   const { data, error } = await rpc('get_dashboard', { p_shop_key: shopKey, p_token: token });
   if (error) return { ok: false, reason: 'error' };
-  const d = data as (DashboardData & { ok?: boolean; reason?: string }) | null;
+  const d = data as (DashboardData & { ok?: boolean; reason?: string; engine_alive?: boolean }) | null;
   if (!d || !d.ok) return { ok: false, reason: d?.reason ?? 'error' };
-  return { ok: true, data: { stats: d.stats, channels: d.channels, config: d.config, feed: d.feed } };
+  return { ok: true, data: { stats: d.stats, channels: d.channels, config: d.config, feed: d.feed, engineAlive: !!d.engine_alive } };
 }

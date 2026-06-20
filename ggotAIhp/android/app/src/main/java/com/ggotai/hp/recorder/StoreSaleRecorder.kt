@@ -17,7 +17,10 @@ class StoreSaleRecorder(private val context: Context) {
 
     data class Result(val file: File, val elapsedMs: Long, val hadSpeech: Boolean)
 
-    companion object { private const val TAG = "StoreSaleRecorder"; private const val POLL_MS = 200L }
+    companion object {
+        private const val TAG = "StoreSaleRecorder"
+        private const val POLL_MS = 200L
+    }
 
     private var recorder: MediaRecorder? = null
     private var outFile: File? = null
@@ -27,7 +30,12 @@ class StoreSaleRecorder(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     private var onAutoStop: ((StopReason) -> Unit)? = null
 
-    /** 녹음 시작. 성공 true. (호출 전 RECORD_AUDIO 권한이 있어야 함) */
+    /**
+     * 녹음 시작. 성공 시 true. (호출 전 RECORD_AUDIO 권한 필요)
+     *
+     * 주의: onAutoStop 콜백은 반드시 stop() 또는 cancel() 을 호출해야 한다.
+     * 콜백에서 종료하지 않으면 MediaRecorder 가 해제되지 않고 계속 녹음된다.
+     */
     fun start(onAutoStop: (StopReason) -> Unit): Boolean {
         this.onAutoStop = onAutoStop
         val dir = File(context.filesDir, "store_sale").apply { mkdirs() }
@@ -101,5 +109,6 @@ class StoreSaleRecorder(private val context: Context) {
         recorder?.let { runCatching { it.stop() }; runCatching { it.release() } }
         recorder = null
         outFile?.let { runCatching { it.delete() } }
+        outFile = null
     }
 }

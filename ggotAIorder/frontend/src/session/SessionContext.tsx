@@ -2,6 +2,7 @@ import React, { createContext, useContext, useState, useCallback, useEffect } fr
 import { supabase } from '../supabase';
 import { authenticate, type Session, type AuthResult, type AuthClient } from './authenticate';
 import { restoreSession, type RpcLike, type TokenStore } from './rememberToken';
+import { webTokenStore } from './webTokenStore';
 
 interface SessionContextValue {
   session: Session | null;
@@ -17,11 +18,28 @@ const SessionContext = createContext<SessionContextValue | null>(null);
 // supabase 의 .rpc() 는 구조적으로 AuthClient/RpcLike 를 만족(타입은 단일 캐스트)
 const rpcClient = supabase as unknown as AuthClient & RpcLike;
 
-// Electron safeStorage 어댑터(웹 dev 에서는 무음 skip)
-const electronStore: TokenStore = {
-  load: async () => (await window.electronAPI?.loadRememberToken?.()) ?? null,
-  clear: async () => { await window.electronAPI?.clearRememberToken?.(); },
+// 데스크톱(Electron)이면 safeStorage, 웹이면 localStorage/sessionStorage 폴백.
+// 이게 없으면 웹에선 토큰이 저장·복원되지 않아 새로고침 때마다 로그인 화면으로 튕긴다.
+const isDesktop = typeof window !== 'undefined' && !!window.electronAPI;
+const tokenStore: TokenStore = {
+  load: async () =>
+    isDesktop ? ((await window.electronAPI?.loadRememberToken?.()) ?? null) : webTokenStore.load(),
+  clear: async () => {
+    if (isDesktop) await window.electronAPI?.clearRememberToken?.();
+    else webTokenStore.clear();
+  },
 };
+
+// 발급된 remember-token 을 플랫폼에 맞게 저장한다(autoLogin=영구 여부).
+async function persistToken(shopKey: number, token: string, autoLogin: boolean): Promise<void> {
+  if (isDesktop) {
+    if (autoLogin && window.electronAPI?.saveRememberToken) {
+      await window.electronAPI.saveRememberToken(shopKey, token);
+    }
+  } else {
+    webTokenStore.save(shopKey, token, autoLogin);
+  }
+}
 
 export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
@@ -33,7 +51,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     let active = true;
     (async () => {
       try {
-        const restored = await restoreSession(rpcClient, electronStore);
+        const restored = await restoreSession(rpcClient, tokenStore);
         if (active && restored) { setSession(restored.session); setReadToken(restored.token); }
       } finally {
         if (active) setAuthReady(true);
@@ -49,9 +67,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const { data: token } = await rpcClient.rpc('issue_remember_token', { p_user_id: result.session.shopKey });
       if (typeof token === 'string') {
         setReadToken(token);
-        if (rememberMe && window.electronAPI?.saveRememberToken) {
-          await window.electronAPI.saveRememberToken(result.session.shopKey, token);
-        }
+        await persistToken(result.session.shopKey, token, rememberMe);
       }
     }
     return result;
@@ -59,7 +75,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const logout = useCallback(() => {
     if (session) void rpcClient.rpc('clear_remember_token', { p_user_id: session.shopKey });
-    void window.electronAPI?.clearRememberToken?.();
+    void tokenStore.clear();
     setSession(null);
     setReadToken(null);
   }, [session]);

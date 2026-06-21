@@ -73,10 +73,17 @@ def fill_order_form(frame, order: RpaOrder, *, auto_submit: bool) -> None:
                 }""",
                 [name, value],
             )
-    # 3) 등록 — submit_reg 호출 여부를 반환받아 미발견 시 실패로 간주
+    # 3) 등록 — submit_reg 호출 여부를 반환받아 미발견 시 실패로 간주.
+    # submit_reg 는 confirm()/alert() 네이티브 다이얼로그를 띄운다. CDP 환경에선
+    # Playwright dialog 핸들러의 accept()가 레이스에 져('No dialog is showing')
+    # confirm 이 기본값(취소=false)으로 닫히면 등록이 조용히 중단된다. 이를 막으려
+    # 호출 직전 window.confirm/alert 를 무력화(자동 '예')해 다이얼로그 자체를 없앤다.
     if auto_submit:
         called = frame.evaluate(
-            "() => { if (typeof submit_reg === 'function') { submit_reg(); return true; }"
+            "() => {"
+            " window.confirm = () => true;"
+            " window.alert = () => {};"
+            " if (typeof submit_reg === 'function') { submit_reg(); return true; }"
             " return false; }"
         )
         if not called:
@@ -236,7 +243,17 @@ class FlowerNt3Automator:
                 if ctx is None:
                     raise RuntimeError("FlowerNT3 브라우저 컨텍스트 없음 — 입력 불가")
                 page = ctx.pages[0] if ctx.pages else ctx.new_page()
-                page.on("dialog", lambda d: d.accept())
+
+                # 폼 외 다이얼로그(로그인/네비게이션) 폴백 처리. CDP 환경에선 다이얼로그가
+                # 이미 자동 처리된 뒤 accept()가 와 'No dialog is showing'이 날 수 있어
+                # 레이스 예외를 삼킨다(등록 confirm 은 fill_order_form 에서 별도 무력화).
+                def _accept_dialog(d) -> None:
+                    try:
+                        d.accept()
+                    except Exception:
+                        logger.debug("FlowerNT3 dialog accept 레이스 — 무시")
+
+                page.on("dialog", _accept_dialog)
                 # 주문입력 프레임을 신규폼으로 새로고침(if/else 모두 재조회 후 폴백)
                 order_url = self._order_url()
                 frame = self._order_frame(page)

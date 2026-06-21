@@ -26,5 +26,11 @@
   <input type="text" name="event_txt">
   <input type="text" name="people_txt">
   <textarea name="msg_text"></textarea>
-  <script>function submit_reg(){ document.title = "REG_CALLED"; }</script>
+  <script>
+    // 실제 FlowerNT3: 등록 시 confirm() 확인창을 거쳐 '예'일 때만 등록 진행.
+    function submit_reg(){
+      if (confirm("등록하시겠습니까?")) { document.title = "REG_CALLED"; }
+      else { document.title = "REG_CANCELLED"; }
+    }
+  </script>
 </form></body></html>

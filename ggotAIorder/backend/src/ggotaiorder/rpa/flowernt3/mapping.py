@@ -44,10 +44,15 @@ _SANG_DIVI_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
 )
 
 
-def product_to_sang_divi(product_name: str | None) -> str:
-    """상품명 → 상품분류(sang_divi) 옵션 텍스트. 매칭 없으면 '' (미선택).
+DEFAULT_SANG_DIVI = "기타"
 
-    키워드 휴리스틱이라 완벽하지 않다 — 라이브 운용하며 _SANG_DIVI_RULES를 보강한다.
+
+def product_to_sang_divi(product_name: str | None) -> str:
+    """상품명 → 상품분류(sang_divi) 옵션 텍스트. 빈 상품명만 '', 그 외 미매칭은 '기타'.
+
+    sang_divi는 FlowerNT 서버 필수값이라 미선택('')이면 "상품분류는 반드시
+    선택해주세요"로 등록이 거부된다(라이브 확인). 따라서 키워드 미매칭이어도
+    '기타'로 폴백해 등록이 통과되게 한다. 키워드 휴리스틱은 _SANG_DIVI_RULES로 보강.
     """
     n = (product_name or "").strip()
     if not n:
@@ -58,7 +63,7 @@ def product_to_sang_divi(product_name: str | None) -> str:
     for keywords, category in _SANG_DIVI_RULES:
         if any(k in n for k in keywords):
             return category
-    return ""
+    return DEFAULT_SANG_DIVI
 
 
 def normalize_price(price: object) -> str:

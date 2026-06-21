@@ -51,7 +51,10 @@ def test_product_to_sang_divi():
     assert m.product_to_sang_divi("과일바구니") == "과일바구니"
     assert m.product_to_sang_divi("축하 오브제") == "축하오브제"
     assert m.product_to_sang_divi("") == ""
-    assert m.product_to_sang_divi("알수없는상품") == ""
+    # 키워드 미매칭이어도 '기타'로 폴백 — sang_divi는 FlowerNT 서버 필수값이라
+    # 미선택('')이면 "상품분류는 반드시 선택해주세요"로 등록이 거부된다(라이브 확인).
+    assert m.product_to_sang_divi("알수없는상품") == "기타"
+    assert m.product_to_sang_divi("행복나무") == "기타"
 
 
 def test_split_delivery_datetime():

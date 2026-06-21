@@ -19,6 +19,11 @@ logger = logging.getLogger(__name__)
 
 ORDER_FRAME_MARK = "order/order3.asp"
 ORDER_PATH = "/order/order3.asp"
+MAIN_PATH = "/main.asp"
+# FlowerNT3는 main.asp 프레임셋 구조. 주문폼은 콘텐츠 프레임(flowernt3Main)에 로드해야
+# 제출 대상인 숨은 프레임(inputform)이 살아 있어 등록이 완료된다. 최상위 page를
+# 직접 order3.asp로 이동하면 프레임셋이 깨져 inputform이 사라지고 등록이 누락된다.
+CONTENT_FRAME_NAME = "flowernt3Main"
 
 
 def _cdp_url(debug_port: int) -> str:
@@ -188,6 +193,18 @@ class FlowerNt3Automator:
                 return f
         return None
 
+    def _main_url(self) -> str:
+        parts = urlsplit(self.url)
+        origin = f"{parts.scheme}://{parts.netloc}" if parts.netloc else self.url
+        return origin + MAIN_PATH
+
+    def _content_frame(self, page):
+        """프레임셋 콘텐츠 프레임(flowernt3Main). 이름은 네비게이션 후에도 유지된다."""
+        for f in page.frames:
+            if f.name == CONTENT_FRAME_NAME:
+                return f
+        return None
+
     def is_program_running(self) -> bool:
         # 전용 Chrome이 꺼져 있으면 직접 띄운다(사장님 무조작). 실패 시 미구동→백업.
         if not self._ensure_browser_running():
@@ -254,14 +271,21 @@ class FlowerNt3Automator:
                         logger.debug("FlowerNT3 dialog accept 레이스 — 무시")
 
                 page.on("dialog", _accept_dialog)
-                # 주문입력 프레임을 신규폼으로 새로고침(if/else 모두 재조회 후 폴백)
+                # 주문폼은 반드시 프레임셋 콘텐츠 프레임(flowernt3Main) 안에서 연다.
+                # 최상위 page를 order3.asp로 직접 이동하면 프레임셋이 깨져 제출 대상
+                # (inputform) 프레임이 사라지고, submit_reg는 돌지만 등록이 누락된다.
                 order_url = self._order_url()
-                frame = self._order_frame(page)
-                if frame is not None:
-                    frame.goto(order_url, wait_until="domcontentloaded")
-                else:
-                    page.goto(order_url, wait_until="domcontentloaded")
-                frame = self._order_frame(page) or page.main_frame
+                content = self._content_frame(page)
+                if content is None:
+                    page.goto(self._main_url(), wait_until="domcontentloaded")
+                    page.wait_for_timeout(1000)
+                    content = self._content_frame(page)
+                if content is None:
+                    raise RuntimeError(
+                        "FlowerNT3 콘텐츠 프레임(flowernt3Main) 없음 — 입력 불가"
+                    )
+                content.goto(order_url, wait_until="domcontentloaded")
+                frame = self._content_frame(page) or page.main_frame
                 fill_order_form(frame, order, auto_submit=self.auto_submit)
                 # 등록 POST가 끝날 때까지 대기(close로 in-flight 취소 방지). 타임아웃은 무시.
                 try:

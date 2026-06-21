@@ -43,6 +43,10 @@ def test_fill_order_form_populates_fields():
         assert val("customer_name") == "홍길동"
         assert val("sang_money") == "50000"
         assert val("sang_realMoney") == "50000"  # 판매가 = 소비정가
+        # 배달비용 0 입력으로 총금액(readonly 자동계산) = 판매가 - 배달비용 = 50000
+        assert val("baesong_money") == "0"
+        assert val("total_money") == "50000"
+        assert val("total_sumoney") == "50000"
         # 상품분류: '장미' → 생화 (value '82626|생화')
         assert page.eval_on_selector("select[name=sang_divi]", "e=>e.value") == "82626|생화"
         assert val("hope_date") == "2026-06-20"

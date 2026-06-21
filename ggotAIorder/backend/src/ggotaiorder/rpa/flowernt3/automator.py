@@ -78,6 +78,24 @@ def fill_order_form(frame, order: RpaOrder, *, auto_submit: bool) -> None:
                 }""",
                 [name, value],
             )
+    # 2-b) 총금액(total_money/total_sumoney)은 readonly 자동계산 필드다. 배달비용
+    # (baesong_money) 입력 이벤트가 '총금액 = 판매가 - 배달비용' 계산을 트리거한다.
+    # RPA가 값만 주입하면 onchange/onkeyup이 안 걸려 총금액이 0으로 남으므로, 배달비용을
+    # 명시 입력하고 계산 이벤트를 직접 발생시킨다(라이브 확인).
+    frame.evaluate(
+        """(fee) => {
+            const f = document.forms['order_form2'];
+            if (!f || !f.baesong_money) return;
+            f.baesong_money.value = fee;
+            if (typeof getPriceString === 'function') {
+                try { getPriceString(f.baesong_money, 0, 1); } catch (e) {}
+            }
+            for (const ev of ['keyup', 'change', 'blur']) {
+                f.baesong_money.dispatchEvent(new Event(ev, { bubbles: true }));
+            }
+        }""",
+        "0",
+    )
     # 3) 등록 — submit_reg 호출 여부를 반환받아 미발견 시 실패로 간주.
     # submit_reg 는 confirm()/alert() 네이티브 다이얼로그를 띄운다. CDP 환경에선
     # Playwright dialog 핸들러의 accept()가 레이스에 져('No dialog is showing')

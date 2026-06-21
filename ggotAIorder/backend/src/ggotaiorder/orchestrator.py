@@ -16,6 +16,7 @@ from ggotaiorder.config import load_config
 from ggotaiorder.core.heartbeat import record_heartbeat
 from ggotaiorder.pipeline.catchup import CatchupScanner
 from ggotaiorder.realtime.listener import RealtimeListener
+from ggotaiorder.rpa.retry import RpaRetryScanner
 from ggotaiorder.scraper.crawler import poll_once
 
 logger = logging.getLogger(__name__)
@@ -25,6 +26,9 @@ _DEFAULT_INTRANET_INTERVAL_MIN = 30
 
 # catch-up 스캔 주기(분). 부팅 1회 후 이 간격으로 미처리분을 따라잡는다.
 _CATCHUP_INTERVAL_MIN = 30
+
+# manual(미구동) RPA 주문 재시도 주기(분). 상한(retry.RPA_MAX_ATTEMPTS)까지 따라잡는다.
+_RPA_RETRY_INTERVAL_MIN = 5
 
 # 하트비트 주기(초). 상황판은 최근 90초 내 신호로 '가동중'을 판정한다(get_dashboard).
 _HEARTBEAT_INTERVAL_SEC = 20
@@ -40,6 +44,7 @@ class Orchestrator:
         self._shop_key: int | None = None  # start() 시점에 로딩(테스트는 start 미호출)
         self._listener = RealtimeListener()
         self._scanner = CatchupScanner()
+        self._rpa_retry = RpaRetryScanner()
         self._scheduler = AsyncIOScheduler()
         self._server: uvicorn.Server | None = None
 
@@ -73,6 +78,16 @@ class Orchestrator:
             await self._scanner.scan_once()
         except Exception:
             logger.exception("catch-up 스캔 실패(다음 주기에 재시도)")
+
+    async def _scheduled_rpa_retry(self) -> None:
+        """일시정지가 아니면 manual RPA 주문을 1회 재시도 스캔한다."""
+        if self._paused:
+            logger.debug("paused 상태 — RPA 재시도 스킵")
+            return
+        try:
+            await self._rpa_retry.scan_once()
+        except Exception:
+            logger.exception("RPA 재시도 스캔 실패(다음 주기에 재시도)")
 
     async def _heartbeat(self) -> None:
         """수집엔진 생존 신호를 기록한다(paused 와 무관 — 프로세스 생존이 기준)."""
@@ -110,6 +125,16 @@ class Orchestrator:
             "interval",
             minutes=_CATCHUP_INTERVAL_MIN,
             id="catchup_scan",
+            max_instances=1,
+            coalesce=True,
+        )
+        # manual(미구동) RPA 주문 재시도: 부팅 1회 + 주기적으로(브라우저 복구 시 자동 등록).
+        self._scheduler.add_job(self._scheduled_rpa_retry, "date", id="rpa_retry_boot")
+        self._scheduler.add_job(
+            self._scheduled_rpa_retry,
+            "interval",
+            minutes=_RPA_RETRY_INTERVAL_MIN,
+            id="rpa_retry",
             max_instances=1,
             coalesce=True,
         )

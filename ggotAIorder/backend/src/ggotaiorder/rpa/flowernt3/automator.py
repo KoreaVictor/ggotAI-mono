@@ -223,6 +223,20 @@ class FlowerNt3Automator:
                 return f
         return None
 
+    def _active_page(self, ctx):
+        """작업할 정상 페이지를 고른다. flowernt 페이지를 우선하고, 빈/detached
+        페이지(진단·세션꼬임으로 남은 about:blank 등)는 피한다. 정상 페이지가
+        없으면 새로 연다. ctx.pages[0]가 빈 페이지면 goto가 'Frame has been
+        detached'로 터져 로그인/입력이 통째로 실패하던 문제를 방지한다.
+        """
+        for pg in ctx.pages:
+            try:
+                if "flowernt" in (pg.url or "").lower():
+                    return pg
+            except Exception:
+                continue
+        return ctx.new_page()
+
     def is_program_running(self) -> bool:
         # 전용 Chrome이 꺼져 있으면 직접 띄운다(사장님 무조작). 실패 시 미구동→백업.
         if not self._ensure_browser_running():
@@ -235,7 +249,7 @@ class FlowerNt3Automator:
                     ctx = browser.contexts[0] if browser.contexts else None
                     if ctx is None:
                         return False
-                    page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                    page = self._active_page(ctx)
                     if not self._logged_in(page):
                         return self._try_login(page)
                     return True
@@ -277,7 +291,7 @@ class FlowerNt3Automator:
                 ctx = browser.contexts[0] if browser.contexts else None
                 if ctx is None:
                     raise RuntimeError("FlowerNT3 브라우저 컨텍스트 없음 — 입력 불가")
-                page = ctx.pages[0] if ctx.pages else ctx.new_page()
+                page = self._active_page(ctx)
 
                 # 폼 외 다이얼로그(로그인/네비게이션) 폴백 처리. CDP 환경에선 다이얼로그가
                 # 이미 자동 처리된 뒤 accept()가 와 'No dialog is showing'이 날 수 있어

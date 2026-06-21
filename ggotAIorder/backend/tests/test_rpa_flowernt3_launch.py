@@ -101,3 +101,49 @@ def test_is_program_running_false_when_launch_fails(tmp_path, monkeypatch):
     monkeypatch.setattr(a, "_ensure_browser_running", lambda: False)
     # 기동 실패 시 CDP 연결 시도 없이 즉시 False(→ 백업/수동)
     assert a.is_program_running() is False
+
+
+class _FakePage:
+    def __init__(self, url):
+        self.url = url
+
+
+class _FakeCtx:
+    def __init__(self, pages):
+        self.pages = pages
+        self.new_page_called = False
+
+    def new_page(self):
+        self.new_page_called = True
+        return _FakePage("about:blank#new")
+
+
+def test_active_page_prefers_flowernt_page(tmp_path):
+    a = _automator(tmp_path)
+    blank = _FakePage("")
+    good = _FakePage("https://www.flowernt.com/main.asp")
+    ctx = _FakeCtx([blank, good])
+    # 빈/detached 페이지(pages[0])를 피하고 flowernt 페이지를 고른다
+    assert a._active_page(ctx) is good
+    assert ctx.new_page_called is False
+
+
+def test_active_page_opens_new_when_no_flowernt(tmp_path):
+    a = _automator(tmp_path)
+    ctx = _FakeCtx([_FakePage(""), _FakePage("about:blank")])
+    # 정상 flowernt 페이지가 없으면(빈/detached뿐) 새 페이지를 연다
+    page = a._active_page(ctx)
+    assert ctx.new_page_called is True
+    assert page is not None
+
+
+def test_active_page_skips_page_whose_url_raises(tmp_path):
+    class _Detached:
+        @property
+        def url(self):
+            raise RuntimeError("Frame has been detached")
+
+    a = _automator(tmp_path)
+    good = _FakePage("https://www.flowernt.com/order/order3.asp")
+    ctx = _FakeCtx([_Detached(), good])
+    assert a._active_page(ctx) is good

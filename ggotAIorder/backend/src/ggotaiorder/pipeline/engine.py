@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from ggotaiorder.pipeline.extractor import extract_order
 from ggotaiorder.pipeline.models import DELIVERY_AT_UNKNOWN, CallHistory, OrderExtraction
@@ -30,6 +30,11 @@ ORDER_FIELDS = (
 
 # Realtime이 직접 처리하는 채널 (catch-up 스캔도 같은 집합을 사용 — 단일 출처).
 REALTIME_CHANNELS = {"핸드폰", "가게음성"}
+
+# 매장판매(즉석 판매) 채널. 배송일 미상 시 주문일(오늘)로 채운다.
+STORE_SALE_CHANNEL = "가게음성"
+
+_KST = timezone(timedelta(hours=9))
 
 # 영구 실패 행의 무한 재시도 차단 상한 (catch-up 스캔과 공유)
 MAX_ATTEMPTS = 5
@@ -80,6 +85,19 @@ def _normalize_delivery_at(value: str | None) -> str:
     return DELIVERY_AT_UNKNOWN
 
 
+def _resolve_delivery_at(row: CallHistory, extraction: OrderExtraction) -> str:
+    """배송일시 결정. 매장판매는 배송일 미상 시 주문일(오늘 KST)로 채운다.
+
+    매장판매(가게음성)는 즉석 판매라 배송일=주문일이다. 센티넬(2099)로 두면
+    FlowerNT 등록 시 주문목록(오늘/이번주 화면)에 안 보이므로 오늘로 보정한다.
+    그 외 채널은 기존대로 센티넬 유지(사장님 수동 보정 대상).
+    """
+    resolved = _normalize_delivery_at(extraction.delivery_at)
+    if resolved == DELIVERY_AT_UNKNOWN and row.channel_order == STORE_SALE_CHANNEL:
+        return datetime.now(_KST).isoformat()
+    return resolved
+
+
 def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
     """추출 결과 + 수집 이력으로 order_details INSERT payload 를 만든다.
 
@@ -97,7 +115,7 @@ def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
         "product_name": extraction.product_name or "미정",
         "quantity": extraction.quantity if extraction.quantity is not None else 1,
         "price": extraction.price if extraction.price is not None else 0,
-        "delivery_at": _normalize_delivery_at(extraction.delivery_at),
+        "delivery_at": _resolve_delivery_at(row, extraction),
         "delivery_at_text": extraction.delivery_at_text,
         "delivery_place": extraction.delivery_place or "미정",
         "receiver_name": extraction.receiver_name or "미정",

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { useSession } from '../session/SessionContext';
 import { getSettings, saveSettings, type SettingsData } from '../settings/client';
+import { nextRpaUrl } from '../settings/programDefaults';
 import type { DashRpc } from '../dashboard/client';
 import { encryptPassword } from '../utils/crypto';
 import { Save, Shield, Bell, Globe, Key, AlertTriangle, CheckCircle2, Lock } from 'lucide-react';
@@ -12,6 +13,7 @@ const DEFAULTS: SettingsData = {
   use_notification: 'Y',
   notification_phone_number: '',
   rpa_success_message: '{channel} 주문 {count}건 꽃가게 관리 프로그램에 입력 완료했습니다.',
+  rpa_manual_message: '[ggotAI] {channel} 주문 {count}건 접수 — 관리 프로그램에 직접 입력해 주세요.',
   rpa_fail_message: '[ggotAI 경고] {channel} 주문 자동 입력 실패! 수동 확인 바랍니다.',
   order_hp_1: '',
   order_hp_2: '',
@@ -25,6 +27,12 @@ const DEFAULTS: SettingsData = {
   intranet_check_interval: 30,
   has_shopping_mall_password: false,
   has_intranet_password: false,
+  rpa_program_type: '',
+  rpa_program_url: '',
+  rpa_login_id: '',
+  rpa_enabled: 'N',
+  rpa_auto_submit: 'Y',
+  has_rpa_login_password: false,
 };
 
 function PwBadge({ set }: { set: boolean }) {
@@ -49,6 +57,7 @@ export function SettingsView() {
   const [settings, setSettings] = useState<SettingsData>(DEFAULTS);
   const [shoppingMallPassword, setShoppingMallPassword] = useState('');
   const [intranetPassword, setIntranetPassword] = useState('');
+  const [rpaLoginPassword, setRpaLoginPassword] = useState('');
 
   useEffect(() => {
     let active = true;
@@ -74,6 +83,11 @@ export function SettingsView() {
           shopping_mall_id: r.settings.shopping_mall_id ?? '',
           intranet_url: r.settings.intranet_url ?? '',
           intranet_id: r.settings.intranet_id ?? '',
+          rpa_program_type: r.settings.rpa_program_type ?? '',
+          rpa_program_url: r.settings.rpa_program_url ?? '',
+          rpa_login_id: r.settings.rpa_login_id ?? '',
+          rpa_enabled: r.settings.rpa_enabled ?? 'N',
+          rpa_auto_submit: r.settings.rpa_auto_submit ?? 'Y',
         });
       }
       setLoading(false);
@@ -83,7 +97,17 @@ export function SettingsView() {
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setSettings((prev) => ({ ...prev, [name]: value }));
+    setSettings((prev) => {
+      // 프로그램 종류 변경 시 웹 주소 자동 채움(사용자 입력값은 보존)
+      if (name === 'rpa_program_type') {
+        return {
+          ...prev,
+          rpa_program_type: value,
+          rpa_program_url: nextRpaUrl(value, prev.rpa_program_url, prev.rpa_program_type),
+        };
+      }
+      return { ...prev, [name]: value };
+    });
   };
 
   const handleSave = async (e: React.FormEvent) => {
@@ -94,12 +118,13 @@ export function SettingsView() {
 
     const smPw = shoppingMallPassword.trim() ? encryptPassword(shoppingMallPassword.trim()) : null;
     const itPw = intranetPassword.trim() ? encryptPassword(intranetPassword.trim()) : null;
+    const rpaPw = rpaLoginPassword.trim() ? encryptPassword(rpaLoginPassword.trim()) : null;
 
     const r = await saveSettings(rpc, shopKey, readToken ?? '', {
       ...settings,
       shopping_mall_check_interval: Number(settings.shopping_mall_check_interval),
       intranet_check_interval: Number(settings.intranet_check_interval),
-    }, smPw, itPw);
+    }, smPw, itPw, rpaPw);
 
     setSaving(false);
     if (!r.ok) {
@@ -114,9 +139,11 @@ export function SettingsView() {
       ...prev,
       has_shopping_mall_password: prev.has_shopping_mall_password || smPw !== null,
       has_intranet_password: prev.has_intranet_password || itPw !== null,
+      has_rpa_login_password: prev.has_rpa_login_password || rpaPw !== null,
     }));
     setShoppingMallPassword('');
     setIntranetPassword('');
+    setRpaLoginPassword('');
   };
 
   if (loading) {
@@ -264,7 +291,64 @@ export function SettingsView() {
           </div>
         </div>
 
-        {/* 섹션 3: 알림 */}
+        {/* 섹션 3: 관리 프로그램 (자동입력) */}
+        <div className="glass-panel rounded-xl p-6 shadow-xl space-y-6">
+          <div className="flex items-center gap-2 border-b border-brand-border pb-3">
+            <Key className="h-5 w-5 text-brand-primary" />
+            <h2 className="text-lg font-semibold text-brand-text-primary">관리 프로그램 (자동입력)</h2>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div>
+              <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">프로그램 종류</label>
+              <select name="rpa_program_type" value={settings.rpa_program_type} onChange={handleInputChange}
+                className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none">
+                <option value="">선택 안 함</option>
+                <option value="flowernt">FlowerNT</option>
+                <option value="roseweb">Roseweb</option>
+                <option value="etc">기타</option>
+              </select>
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">웹 주소</label>
+              <input type="url" name="rpa_program_url" placeholder="https://www.flowernt.com"
+                value={settings.rpa_program_url ?? ''} onChange={handleInputChange}
+                className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">아이디</label>
+              <input type="text" name="rpa_login_id" placeholder="로그인 아이디"
+                value={settings.rpa_login_id ?? ''} onChange={handleInputChange}
+                className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none" />
+            </div>
+            <div>
+              <label className="text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                <Key className="h-3.5 w-3.5 text-brand-text-muted" />새 비밀번호
+                <PwBadge set={settings.has_rpa_login_password} />
+              </label>
+              <input type="password" placeholder="수정할 때만 입력"
+                value={rpaLoginPassword} onChange={(e) => setRpaLoginPassword(e.target.value)}
+                className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none" />
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">RPA 사용</label>
+              <select name="rpa_enabled" value={settings.rpa_enabled} onChange={handleInputChange}
+                className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none">
+                <option value="Y">사용</option>
+                <option value="N">미사용</option>
+              </select>
+            </div>
+            <div>
+              <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">자동 등록</label>
+              <select name="rpa_auto_submit" value={settings.rpa_auto_submit} onChange={handleInputChange}
+                className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none">
+                <option value="Y">등록까지 자동</option>
+                <option value="N">채우기만</option>
+              </select>
+            </div>
+          </div>
+        </div>
+
+        {/* 섹션 4: 알림 */}
         <div className="glass-panel rounded-xl p-6 shadow-xl space-y-6">
           <div className="flex items-center gap-2 border-b border-brand-border pb-3">
             <Bell className="h-5 w-5 text-brand-primary" />
@@ -287,12 +371,18 @@ export function SettingsView() {
                     value={settings.notification_phone_number ?? ''} onChange={handleInputChange}
                     className="w-full md:w-1/2 bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none" />
                 </div>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                   <div>
                     <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">RPA 전산 입력 성공 보고 문자 템플릿</label>
                     <textarea name="rpa_success_message" rows={3} value={settings.rpa_success_message} onChange={handleInputChange}
                       className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none resize-y" />
                     <span className="text-[10px] text-brand-text-muted mt-1.5 block">※ 변수 사용: `{'{channel}'}` (수집 채널명 치환), `{'{count}'}` (주문 개수 치환)</span>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">RPA 수동입력 필요 안내 문자 템플릿</label>
+                    <textarea name="rpa_manual_message" rows={3} value={settings.rpa_manual_message} onChange={handleInputChange}
+                      className="w-full bg-brand-bg/50 border border-brand-border focus:border-brand-primary-hover focus:ring-1 focus:ring-brand-primary rounded-lg px-4 py-2.5 text-sm text-brand-text-primary transition outline-none resize-y" />
+                    <span className="text-[10px] text-brand-text-muted mt-1.5 block">※ 관리 프로그램 미구동 시 백업만 생성됨(수동입력 필요). 변수: `{'{channel}'}`, `{'{count}'}`</span>
                   </div>
                   <div>
                     <label className="block text-xs font-semibold text-brand-text-secondary uppercase tracking-wider mb-2">RPA 전산 입력 실패 경고 문자 템플릿</label>

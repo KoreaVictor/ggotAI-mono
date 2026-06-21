@@ -24,6 +24,8 @@ dependencies = [
     "pystray>=0.19.5",           # tray (트레이 아이콘)
     "Pillow>=12.2.0",            # pystray 아이콘 이미지
     "pywin32>=311; sys_platform == 'win32'",  # service (Windows 서비스)
+    "playwright>=1.60.0",        # rpa.flowernt3 (웹 관리 프로그램 자동입력)
+    "greenlet>=3.1.1,<3.5",      # playwright sync API 의존 — 3.5.x는 이 환경서 DLL 로드 실패
 ]
 
 [project.optional-dependencies]

@@ -13,6 +13,7 @@ describe('deriveCurrentTask', () => {
   it('N → 주문 아님', () => expect(deriveCurrentTask(row({ is_order: 'N' }))).toBe('주문 아님'));
   it('Y + ready → 입력 대기', () => expect(deriveCurrentTask(row({ is_order: 'Y', rpa_status: 'ready' }))).toBe('입력 대기'));
   it('Y + success → 입력 완료', () => expect(deriveCurrentTask(row({ is_order: 'Y', rpa_status: 'success' }))).toBe('입력 완료'));
+  it('Y + manual → 수동입력 필요', () => expect(deriveCurrentTask(row({ is_order: 'Y', rpa_status: 'manual' }))).toBe('수동입력 필요'));
   it('Y + fail → 입력 실패', () => expect(deriveCurrentTask(row({ is_order: 'Y', rpa_status: 'fail' }))).toBe('입력 실패'));
   it('Y + rpa null → 대기', () => expect(deriveCurrentTask(row({ is_order: 'Y', rpa_status: null }))).toBe('대기'));
 });

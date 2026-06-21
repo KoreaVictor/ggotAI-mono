@@ -82,6 +82,10 @@ class MainActivity : AppCompatActivity() {
             startActivity(Intent(this, SettingsActivity::class.java))
         }
 
+        binding.btnStoreSale.setOnClickListener {
+            startActivity(Intent(this, StoreSaleActivity::class.java))
+        }
+
         binding.btnExit.setOnClickListener {
             confirmFullExit()
         }

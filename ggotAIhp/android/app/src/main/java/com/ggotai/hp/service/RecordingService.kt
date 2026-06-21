@@ -15,6 +15,7 @@ import androidx.core.app.NotificationCompat
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
 import com.ggotai.hp.manager.UploadManager
+import com.ggotai.hp.util.CallLogReader
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
@@ -75,7 +76,10 @@ class RecordingService : Service() {
             val audioFileName = if (recordFilePath != null) File(recordFilePath).name else ""
             
             // 실제 앱에서는 MediaMetadataRetriever 등으로 길이를 추출할 수 있으나 임시로 0 처리
-            val durationSeconds = 0 
+            val durationSeconds = 0
+
+            // 최근 통화기록에서 수신/발신 종류 확보 (CallLog.Calls.TYPE)
+            val callType = CallLogReader.latestCall(applicationContext)?.type
 
             val callHistory = CallHistory(
                 userPhoneNumber = userPhoneNumber,
@@ -86,6 +90,7 @@ class RecordingService : Service() {
                 audioFileName = audioFileName,
                 audioFilePath = recordFilePath ?: "",
                 durationSeconds = durationSeconds,
+                callType = callType,
                 syncStatus = 0
             )
 

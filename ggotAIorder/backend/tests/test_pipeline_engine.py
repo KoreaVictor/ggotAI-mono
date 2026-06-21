@@ -1,7 +1,8 @@
 import asyncio
+from datetime import datetime, timezone, timedelta
 
 from ggotaiorder.pipeline import engine
-from ggotaiorder.pipeline.models import CallHistory, OrderExtraction
+from ggotaiorder.pipeline.models import DELIVERY_AT_UNKNOWN, CallHistory, OrderExtraction
 
 
 class FakeRepo:
@@ -119,6 +120,73 @@ async def test_order_path_marks_Y_after_successful_insert(monkeypatch):
 
     kinds = [c[0] for c in repo.calls]
     assert kinds.index("insert") < kinds.index("mark_processed")
+
+
+async def test_store_sale_product_and_price_only_inserts(monkeypatch):
+    """매장판매: 상품명+가격만 있어도 주문 경로로 INSERT·enqueue 되어야 한다."""
+    repo = FakeRepo(_row())
+    store_sale = OrderExtraction(product_name="호접란", quantity=1, price=50000)
+    monkeypatch.setattr(engine, "extract_order", lambda text: store_sale)
+    enqueued: list[int] = []
+
+    async def fake_enqueue(order_id: int) -> None:
+        enqueued.append(order_id)
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    kinds = [c[0] for c in repo.calls]
+    assert ("mark_processed", 1, "Y") in repo.calls
+    assert "insert" in kinds
+    assert enqueued == [999]
+
+    payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    assert payload["product_name"] == "호접란"
+    assert payload["price"] == 50000
+    # 배달/수령인 미상은 안전 기본값으로 채워진다.
+    assert payload["receiver_name"] == "미정"
+    assert payload["delivery_place"] == "미정"
+
+
+async def test_store_sale_delivery_at_defaults_to_today(monkeypatch):
+    """매장판매(가게음성)는 배송일 미상 시 주문일(오늘 KST)로 채운다.
+
+    2099 센티넬로 등록되면 FlowerNT 주문목록(오늘/이번주 화면)에 안 보이므로,
+    즉석 판매는 배송일=주문일로 맞춰 등록·노출이 정상화되게 한다.
+    """
+    repo = FakeRepo(_row(channel_order="가게음성"))
+    sale = OrderExtraction(product_name="장미꽃다발", quantity=1, price=50000)
+    monkeypatch.setattr(engine, "extract_order", lambda t: sale)
+
+    async def fake_enqueue(order_id: int) -> None:
+        pass
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    today = datetime.now(timezone(timedelta(hours=9))).date().isoformat()
+    assert payload["delivery_at"] != DELIVERY_AT_UNKNOWN
+    assert payload["delivery_at"].startswith(today)
+
+
+async def test_phone_order_unknown_delivery_keeps_sentinel(monkeypatch):
+    """매장판매가 아닌 채널은 배송일 미상 시 센티넬(2099) 유지(기존 설계 §6)."""
+    repo = FakeRepo(_row(channel_order="핸드폰"))
+    e = OrderExtraction(product_name="장미", price=50000)  # 배송일 미상이지만 주문
+    monkeypatch.setattr(engine, "extract_order", lambda t: e)
+
+    async def fake_enqueue(order_id: int) -> None:
+        pass
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    assert payload["delivery_at"] == DELIVERY_AT_UNKNOWN
 
 
 async def test_non_order_path_sets_N_and_no_insert(monkeypatch):

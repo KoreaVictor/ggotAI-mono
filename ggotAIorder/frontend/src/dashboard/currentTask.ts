@@ -9,6 +9,7 @@ export function deriveCurrentTask(row?: FeedRow): string {
   switch (row.rpa_status) {
     case 'ready':   return '입력 대기';
     case 'success': return '입력 완료';
+    case 'manual':  return '수동입력 필요';
     case 'fail':    return '입력 실패';
     default:        return '대기';
   }

@@ -1,7 +1,8 @@
 """AI 데이터 정형화 파이프라인.
 
-stt_text → Gemini 11필드 추출 → 누락 3개 이상이면 주문 아님(is_order='N'),
-아니면 order_details INSERT(rpa_status='ready') 후 rpa.enqueue 호출.
+stt_text → Gemini 11필드 추출 → 상품명·가격이 모두 있으면 주문, 아니면 주문 아님
+(is_order='N'). 주문이면 order_details INSERT(rpa_status='ready') 후 rpa.enqueue 호출.
+상품명+가격만 있으면 되므로 매장판매(배달·수령인 정보 없는 즉석 판매)도 주문으로 처리된다.
 STT(음성→텍스트)는 stt.transcribe 인터페이스로 위임(현재 스텁).
 """
 
@@ -9,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 
 from ggotaiorder.pipeline.extractor import extract_order
 from ggotaiorder.pipeline.models import DELIVERY_AT_UNKNOWN, CallHistory, OrderExtraction
@@ -20,18 +21,20 @@ from ggotaiorder.scraper.crawler import INTRANET_AUDIO_MARKER
 
 logger = logging.getLogger(__name__)
 
-# Gemini가 추출하는 11개 표준 주문서 필드 (누락 판정 기준 — 보조필드 delivery_at_text 제외)
+# Gemini가 추출하는 11개 표준 주문서 필드 (누락 개수 로깅용 — 보조필드 delivery_at_text 제외)
 ORDER_FIELDS = (
     "customer_name", "customer_phone_number", "product_name", "quantity", "price",
     "delivery_at", "delivery_place", "receiver_name", "receiver_phone_number",
     "ribbon_congratulations", "card_message",
 )
 
-# 누락이 이 값 이상이면 꽃 주문이 아닌 것으로 판별 (PRD 6-4)
-_MISSING_THRESHOLD = 3
-
 # Realtime이 직접 처리하는 채널 (catch-up 스캔도 같은 집합을 사용 — 단일 출처).
 REALTIME_CHANNELS = {"핸드폰", "가게음성"}
+
+# 매장판매(즉석 판매) 채널. 배송일 미상 시 주문일(오늘)로 채운다.
+STORE_SALE_CHANNEL = "가게음성"
+
+_KST = timezone(timedelta(hours=9))
 
 # 영구 실패 행의 무한 재시도 차단 상한 (catch-up 스캔과 공유)
 MAX_ATTEMPTS = 5
@@ -54,6 +57,19 @@ def count_missing(extraction: OrderExtraction) -> int:
     return missing
 
 
+def is_order(extraction: OrderExtraction) -> bool:
+    """주문 판정: 상품명과 가격이 모두 있으면 주문으로 본다.
+
+    배달 주문뿐 아니라 매장판매(배달장소·수령인·리본·카드가 없는 즉석 판매)도
+    상품명+가격만 있으면 주문 경로로 처리한다. 광고·시세·잡담은 추출기가
+    product_name/price 를 null 로 비우는 것을 1차 방어선으로 삼는다(extractor 규칙).
+    """
+    name = extraction.product_name
+    has_product = isinstance(name, str) and name.strip() != ""
+    has_price = extraction.price is not None
+    return has_product and has_price
+
+
 def _normalize_delivery_at(value: str | None) -> str:
     """배달일시를 유효한 timestamptz 문자열로 정규화한다.
 
@@ -67,6 +83,19 @@ def _normalize_delivery_at(value: str | None) -> str:
         except ValueError:
             logger.info("delivery_at 파싱 불가 — 센티넬 폴백: %r", value)
     return DELIVERY_AT_UNKNOWN
+
+
+def _resolve_delivery_at(row: CallHistory, extraction: OrderExtraction) -> str:
+    """배송일시 결정. 매장판매는 배송일 미상 시 주문일(오늘 KST)로 채운다.
+
+    매장판매(가게음성)는 즉석 판매라 배송일=주문일이다. 센티넬(2099)로 두면
+    FlowerNT 등록 시 주문목록(오늘/이번주 화면)에 안 보이므로 오늘로 보정한다.
+    그 외 채널은 기존대로 센티넬 유지(사장님 수동 보정 대상).
+    """
+    resolved = _normalize_delivery_at(extraction.delivery_at)
+    if resolved == DELIVERY_AT_UNKNOWN and row.channel_order == STORE_SALE_CHANNEL:
+        return datetime.now(_KST).isoformat()
+    return resolved
 
 
 def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
@@ -86,7 +115,7 @@ def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
         "product_name": extraction.product_name or "미정",
         "quantity": extraction.quantity if extraction.quantity is not None else 1,
         "price": extraction.price if extraction.price is not None else 0,
-        "delivery_at": _normalize_delivery_at(extraction.delivery_at),
+        "delivery_at": _resolve_delivery_at(row, extraction),
         "delivery_at_text": extraction.delivery_at_text,
         "delivery_place": extraction.delivery_place or "미정",
         "receiver_name": extraction.receiver_name or "미정",
@@ -148,11 +177,13 @@ async def _process_inner(call_history_id: int, repo: OrderRepository) -> None:
         logger.exception("Gemini 추출 실패 id=%s", call_history_id)
         return
 
-    missing = count_missing(extraction)
-    if missing >= _MISSING_THRESHOLD:
+    if not is_order(extraction):
         await asyncio.to_thread(repo.mark_processed, call_history_id, "N")
         await asyncio.to_thread(repo.delete_audio, row.audio_file_name)
-        logger.info("주문 아님 판별 id=%s (누락 %s개)", call_history_id, missing)
+        logger.info(
+            "주문 아님 판별 id=%s (상품명·가격 미존재, 누락 %s개)",
+            call_history_id, count_missing(extraction),
+        )
         return
 
     # order_details INSERT가 성공한 뒤에만 종결('Y')로 마킹한다(부분쓰기 방지).

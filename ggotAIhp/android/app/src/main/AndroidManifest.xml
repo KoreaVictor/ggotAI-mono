@@ -40,6 +40,9 @@
         <activity
             android:name=".SettingsActivity"
             android:exported="false" />
+        <activity
+            android:name=".StoreSaleActivity"
+            android:exported="false" />
 
         <receiver android:name=".receiver.CallReceiver"
             android:exported="true">

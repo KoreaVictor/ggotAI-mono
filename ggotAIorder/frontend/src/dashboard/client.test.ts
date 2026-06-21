@@ -10,6 +10,7 @@ const DATA = {
   channels: [{ channel_order: '핸드폰', total: 2, success: 0 }],
   config: { garjeon: false, hp1: true, hp2: false, voice: true, mall: true, intranet: false },
   feed: [{ id: 1, channel_order: '핸드폰', customer_name: '홍', stt_text: null, is_order: null, rpa_status: null, created_at: '2026-06-07T00:00:00Z' }],
+  engine_alive: true,
 };
 
 describe('getDashboard', () => {
@@ -18,6 +19,12 @@ describe('getDashboard', () => {
     expect(r.ok).toBe(true);
     expect(r.data?.stats.today_total).toBe(3);
     expect(r.data?.channels[0].channel_order).toBe('핸드폰');
+    expect(r.data?.engineAlive).toBe(true);
+  });
+  it('engine_alive 누락 시 false 로 처리', async () => {
+    const { engine_alive: _omit, ...noAlive } = DATA;
+    const r = await getDashboard(fakeRpc(noAlive), 7, 'tk');
+    expect(r.data?.engineAlive).toBe(false);
   });
   it('unauthorized 면 reason 전달', async () => {
     const r = await getDashboard(fakeRpc({ ok: false, reason: 'unauthorized' }), 7, 'bad');

@@ -16,7 +16,7 @@ Deno.serve(async (req: Request) => {
     const formData = await req.formData();
 
     const userPhoneNumber = formData.get("user_phone_number") as string;
-    const phoneNumber = formData.get("phone_number") as string;
+    const phoneNumber = (formData.get("phone_number") as string) || "";
     const customerName = (formData.get("customer_name") as string) || "신규";
     const callDate = formData.get("call_date") as string;
     const callTime = formData.get("call_time") as string;
@@ -24,7 +24,14 @@ Deno.serve(async (req: Request) => {
     const durationSeconds = durationRaw ? parseInt(durationRaw as string) : null;
     const audioFile = formData.get("audio_file") as File | null;
 
-    if (!userPhoneNumber || !phoneNumber || !callDate || !callTime || !audioFile) {
+    // 채널: 미전송/미허용 값이면 '핸드폰'(기존 ggotAIhp 무손상).
+    const rawChannel = (formData.get("channel_order") as string) || "";
+    const channelOrder = rawChannel === "가게음성" ? "가게음성" : "핸드폰";
+    const isStoreSale = channelOrder === "가게음성";
+
+    // 핸드폰은 발신번호 필수, 매장판매(가게음성)는 발신번호 없음.
+    const missingCore = !userPhoneNumber || !callDate || !callTime || !audioFile;
+    if (missingCore || (!isStoreSale && !phoneNumber)) {
       return new Response(
         JSON.stringify({
           status: "error",
@@ -84,14 +91,16 @@ Deno.serve(async (req: Request) => {
     }
 
     // 1단계: DB 먼저 적재 (Storage 업로드 전에 실행하여 고아 파일 방지)
-    // 핸드폰 통화녹음 채널: channel_order='핸드폰', channel_classification=기기(가맹점) 핸드폰 번호
+    const insertCustomerName = isStoreSale
+      ? ((formData.get("customer_name") as string) || "매장판매")
+      : customerName;
     const { error: dbError } = await supabase.from("server_call_history").insert({
-      channel_order: "핸드폰",
+      channel_order: channelOrder,
       channel_classification: userPhoneNumber,
       shop_key: shop.shop_key,
       shop_name: shop.shop_name,
-      customer_phone_number: phoneNumber,
-      customer_name: customerName,
+      customer_phone_number: phoneNumber, // 매장판매는 '' (빈값)
+      customer_name: insertCustomerName,
       call_date: callDate,
       call_time: callTime,
       duration_seconds: durationSeconds,

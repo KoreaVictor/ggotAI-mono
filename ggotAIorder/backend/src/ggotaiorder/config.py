@@ -32,6 +32,9 @@ class Config:
     gemini_api_key: str
     shop_key: int
     rpa_backup_dir: Path
+    rpa_profile_dir: Path
+    rpa_chrome_path: Path
+    flowernt_debug_port: int
 
 
 def load_config(env: Mapping[str, str] | None = None) -> Config:
@@ -70,6 +73,27 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         else Path(__file__).resolve().parents[2] / "backups"
     )
 
+    profile_dir = env.get("RPA_PROFILE_DIR")
+    # 단일 PC(Windows) 배포 기본값 — 가게마다 RPA 전용 Chrome 프로필을 이 경로에 둔다.
+    rpa_profile_dir = (
+        Path(profile_dir) if profile_dir else Path(r"C:\ggotAI\rpa_profile")
+    )
+    chrome_path = env.get("RPA_CHROME_PATH")
+    # 표준 설치 경로 기본값(64bit→32bit 순). 백엔드가 RPA 전용 Chrome을 직접 기동한다.
+    if chrome_path:
+        rpa_chrome_path = Path(chrome_path)
+    else:
+        _candidates = [
+            Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+            Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+        ]
+        rpa_chrome_path = next((p for p in _candidates if p.exists()), _candidates[0])
+
+    try:
+        flowernt_debug_port = int(env.get("RPA_DEBUG_PORT") or 9222)
+    except ValueError:
+        raise ConfigError("RPA_DEBUG_PORT 는 정수여야 합니다.")
+
     return Config(
         supabase_url=env["SUPABASE_URL"],
         supabase_anon_key=env["SUPABASE_ANON_KEY"],
@@ -78,4 +102,7 @@ def load_config(env: Mapping[str, str] | None = None) -> Config:
         gemini_api_key=env["GEMINI_API_KEY"],
         shop_key=shop_key,
         rpa_backup_dir=rpa_backup_dir,
+        rpa_profile_dir=rpa_profile_dir,
+        rpa_chrome_path=rpa_chrome_path,
+        flowernt_debug_port=flowernt_debug_port,
     )

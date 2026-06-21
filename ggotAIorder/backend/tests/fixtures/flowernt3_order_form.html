@@ -1,0 +1,47 @@
+<!doctype html><html><head><meta charset="utf-8"></head><body>
+<form name="order_form2">
+  <input type="radio" name="order_divi" value="인터넷">
+  <input type="radio" name="order_divi" value="전화">
+  <input type="radio" name="order_divi" value="팩스">
+  <input type="radio" name="order_divi" value="매장">
+  <input type="radio" name="order_divi" value="프로그램간">
+  <input type="radio" name="order_divi" value="기타">
+  <input type="text" name="customer_name">
+  <input type="text" name="customer_hp">
+  <select name="sang_divi">
+    <option value="">-선택하세요-</option>
+    <option value="82622|축하화환">축하화환</option>
+    <option value="82626|생화">생화</option>
+    <option value="82623|근조화환">근조화환</option>
+    <option value="0|기타">기타</option>
+  </select>
+  <input type="text" name="sang_name">
+  <input type="text" name="sang_money">
+  <input type="text" name="sang_realMoney">
+  <!-- 배달비용 입력 시 총금액(readonly) 자동계산: 총금액 = 판매가 - 배달비용 -->
+  <input type="text" name="baesong_money" onkeyup="calcTotal()" onchange="calcTotal()">
+  <input type="text" name="total_money" readonly>
+  <input type="text" name="total_sumoney" readonly>
+  <input type="text" name="hope_date">
+  <input type="text" name="hope_time">
+  <input type="text" name="receive_name">
+  <input type="text" name="receive_hp">
+  <input type="text" name="receive_address1">
+  <input type="text" name="event_txt">
+  <input type="text" name="people_txt">
+  <textarea name="msg_text"></textarea>
+  <script>
+    function calcTotal(){
+      var real = parseInt((order_form2.sang_realMoney.value||'0').replace(/[^0-9]/g,'')) || 0;
+      var bae  = parseInt((order_form2.baesong_money.value||'0').replace(/[^0-9]/g,'')) || 0;
+      var t = real - bae;
+      order_form2.total_money.value = String(t);
+      order_form2.total_sumoney.value = String(t);
+    }
+    // 실제 FlowerNT3: 등록 시 confirm() 확인창을 거쳐 '예'일 때만 등록 진행.
+    function submit_reg(){
+      if (confirm("등록하시겠습니까?")) { document.title = "REG_CALLED"; }
+      else { document.title = "REG_CANCELLED"; }
+    }
+  </script>
+</form></body></html>

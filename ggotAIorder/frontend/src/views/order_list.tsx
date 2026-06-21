@@ -124,12 +124,18 @@ export function OrderListView() {
     }
   };
 
-  const renderStatusBadge = (status: 'ready' | 'success' | 'fail') => {
+  const renderStatusBadge = (status: 'ready' | 'success' | 'manual' | 'fail') => {
     switch (status) {
       case 'success':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-success/15 text-brand-success border border-brand-success/30">
             <CheckCircle2 className="h-3 w-3" />성공
+          </span>
+        );
+      case 'manual':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-warning/15 text-brand-warning border border-brand-warning/30">
+            <AlertCircle className="h-3 w-3" />수동입력
           </span>
         );
       case 'fail':
@@ -260,7 +266,7 @@ export function OrderListView() {
                         <button onClick={() => handleViewDetail(order)} className="p-1.5 hover:bg-brand-border rounded-lg text-brand-text-secondary hover:text-brand-primary transition" title="상세 보기">
                           <Eye className="h-4 w-4" />
                         </button>
-                        {order.rpa_status === 'fail' && (
+                        {(order.rpa_status === 'fail' || order.rpa_status === 'manual') && (
                           <button onClick={() => handleRequeue(order.id)} className="p-1.5 hover:bg-brand-warning/15 rounded-lg text-brand-warning transition" title="RPA 재전송">
                             <RefreshCw className="h-4 w-4" />
                           </button>
@@ -384,10 +390,10 @@ export function OrderListView() {
               </div>
             </div>
 
-            {/* 모달 푸터: fail 시 재전송만 */}
+            {/* 모달 푸터: fail/manual(백업) 시 재전송 */}
             <div className="px-6 py-4 border-t border-brand-border/80 flex justify-between items-center bg-brand-card">
               <div>
-                {selectedOrder.rpa_status === 'fail' && (
+                {(selectedOrder.rpa_status === 'fail' || selectedOrder.rpa_status === 'manual') && (
                   <button onClick={() => handleRequeue(selectedOrder.id)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-brand-warning text-brand-bg hover:bg-brand-warning/90 text-xs font-semibold rounded-lg transition">
                     <RefreshCw className="h-3.5 w-3.5" /><span>전산에 RPA로 재입력 시키기</span>

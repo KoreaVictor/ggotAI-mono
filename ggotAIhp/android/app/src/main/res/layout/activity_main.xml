@@ -164,7 +164,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
-                android:text=" 수신 내역"
+                android:text=" 통화내역"
                 android:textColor="@color/text_primary"
                 android:textSize="18sp"
                 android:textStyle="bold" />
@@ -192,6 +192,20 @@
 
     </androidx.constraintlayout.widget.ConstraintLayout>
 
+    <!-- 매장판매: 사장님 음성 주문 인앱 녹음 진입 -->
+    <Button
+        android:id="@+id/btnStoreSale"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginHorizontal="16dp"
+        android:layout_marginBottom="8dp"
+        android:text="🎤 매장판매"
+        android:textSize="16sp"
+        android:textStyle="bold"
+        app:layout_constraintTop_toBottomOf="@id/headerLayout"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintEnd_toEndOf="parent" />
+
     <!-- 격자 테이블 헤더를 과감히 삭제하고 넉넉한 공간의 리스트 뷰 배치 -->
     <androidx.recyclerview.widget.RecyclerView
         android:id="@+id/recyclerView"
@@ -200,7 +214,7 @@
         android:paddingHorizontal="16dp"
         android:paddingBottom="16dp"
         android:clipToPadding="false"
-        app:layout_constraintTop_toBottomOf="@id/headerLayout"
+        app:layout_constraintTop_toBottomOf="@id/btnStoreSale"
         app:layout_constraintBottom_toBottomOf="parent"
         tools:listitem="@layout/item_call_history" />
 

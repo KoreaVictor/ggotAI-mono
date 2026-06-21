@@ -132,8 +132,8 @@ async def test_assembled_e2e_upload_to_backup_and_notify(monkeypatch, tmp_path):
     rpa_repo_holder = {}
     notify_calls = []
 
-    async def spy_notify(order, success):
-        notify_calls.append((order.order_detail_id, success))
+    async def spy_notify(order, outcome):
+        notify_calls.append((order.order_detail_id, outcome))
 
     async def wired_enqueue(order_id):
         rpa_repo = FakeRpaRepo(order_repo.inserted_payload)
@@ -150,8 +150,8 @@ async def test_assembled_e2e_upload_to_backup_and_notify(monkeypatch, tmp_path):
     # --- 3) 배선 단언 ---
     assert order_repo.is_order == "Y"
     assert order_repo.inserted_payload["product_name"] == "장미"
-    assert rpa_repo_holder["repo"].status == "fail"  # 미구동→백업→fail
-    assert notify_calls == [(777, False)]
+    assert rpa_repo_holder["repo"].status == "manual"  # 미구동→백업→manual(수동입력)
+    assert notify_calls == [(777, "manual")]
     backups = list(tmp_path.glob("*.xlsx"))
     assert len(backups) == 1
     assert list(tmp_path.glob("*.txt"))
@@ -186,8 +186,8 @@ async def test_full_live_e2e(monkeypatch, tmp_path):
 
     notify_calls = []
 
-    async def spy_notify(order, success):
-        notify_calls.append((order.order_detail_id, success))
+    async def spy_notify(order, outcome):
+        notify_calls.append((order.order_detail_id, outcome))
 
     async def wired_enqueue(order_id):
         await singleton_macro.enqueue(
@@ -214,10 +214,10 @@ async def test_full_live_e2e(monkeypatch, tmp_path):
             .execute()
         )
         assert od.data, "order_details 가 생성되지 않음"
-        assert od.data[0]["rpa_status"] == "fail"  # 미구동→백업
+        assert od.data[0]["rpa_status"] == "manual"  # 미구동→백업→manual
         assert list(tmp_path.glob("*.xlsx"))
         assert len(notify_calls) == 1
-        assert notify_calls[0][1] is False
+        assert notify_calls[0][1] == "manual"
     finally:
         # 4) 정리: call_history 삭제 → FK CASCADE 로 order_details 동반 삭제
         if call_history_id is not None:

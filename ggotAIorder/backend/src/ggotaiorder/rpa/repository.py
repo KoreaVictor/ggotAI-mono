@@ -18,6 +18,12 @@ class RpaRepository(Protocol):
 
     def set_rpa_status(self, order_detail_id: int, status: str) -> None: ...
 
+    def list_manual_order_ids(
+        self, max_attempts: int, shop_key: int
+    ) -> list[int]: ...
+
+    def increment_rpa_attempts(self, order_detail_id: int) -> None: ...
+
 
 class SupabaseRpaRepository:
     """Supabase 기반 RpaRepository 구현."""
@@ -80,3 +86,34 @@ class SupabaseRpaRepository:
             raise RuntimeError(
                 f"order_details UPDATE(rpa_status) 응답이 없습니다 — id={order_detail_id}"
             )
+
+    def list_manual_order_ids(self, max_attempts: int, shop_key: int) -> list[int]:
+        """재시도 대상: rpa_status='manual' && rpa_attempts < 상한 인 내 가게 주문 id."""
+        res = (
+            get_client()
+            .table("order_details")
+            .select("id")
+            .eq("shop_key", shop_key)
+            .eq("rpa_status", "manual")
+            .lt("rpa_attempts", max_attempts)
+            .order("id")
+            .execute()
+        )
+        return [row["id"] for row in (res.data or [])]
+
+    def increment_rpa_attempts(self, order_detail_id: int) -> None:
+        """rpa_attempts 를 1 증가(읽기-수정-쓰기). 단일 루프라 경합 위험 낮음."""
+        client = get_client()
+        cur = (
+            client.table("order_details")
+            .select("rpa_attempts")
+            .eq("id", order_detail_id)
+            .limit(1)
+            .execute()
+        )
+        attempts = 0
+        if cur.data:
+            attempts = cur.data[0].get("rpa_attempts") or 0
+        client.table("order_details").update({"rpa_attempts": attempts + 1}).eq(
+            "id", order_detail_id
+        ).execute()

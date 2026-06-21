@@ -53,8 +53,8 @@ class FakeBackup:
 def _spy_notify():
     calls = []
 
-    async def notify(order, success):
-        calls.append((order.order_detail_id, success))
+    async def notify(order, outcome):
+        calls.append((order.order_detail_id, outcome))
 
     return calls, notify
 
@@ -70,10 +70,10 @@ async def test_program_running_input_success():
     assert autom.inputs == [7]
     assert backup.written == []
     assert repo.statuses == [(7, "success")]
-    assert calls == [(7, True)]
+    assert calls == [(7, "success")]
 
 
-async def test_program_running_input_fails_backs_up():
+async def test_program_running_input_fails_backs_up_as_fail():
     repo = FakeRepo(_order())
     autom = FakeAutomator(running=True, raises=True)
     backup = FakeBackup()
@@ -83,10 +83,10 @@ async def test_program_running_input_fails_backs_up():
 
     assert backup.written == [7]
     assert repo.statuses == [(7, "fail")]
-    assert calls == [(7, False)]
+    assert calls == [(7, "fail")]
 
 
-async def test_program_not_running_backs_up():
+async def test_program_not_running_backs_up_as_manual():
     repo = FakeRepo(_order())
     autom = FakeAutomator(running=False)
     backup = FakeBackup()
@@ -96,8 +96,8 @@ async def test_program_not_running_backs_up():
 
     assert autom.inputs == []
     assert backup.written == [7]
-    assert repo.statuses == [(7, "fail")]
-    assert calls == [(7, False)]
+    assert repo.statuses == [(7, "manual")]
+    assert calls == [(7, "manual")]
 
 
 async def test_missing_order_skips():
@@ -139,3 +139,34 @@ async def test_singleton_lock_serializes():
     )
 
     assert active["max"] == 1   # 락으로 동시 실행 0 → 최대 동시 1
+
+
+async def test_default_automator_built_from_settings(monkeypatch):
+    import ggotaiorder.rpa.singleton_macro as sm
+
+    def fake_load(shop_key, aes_key):
+        return None  # → ManualOnly
+
+    built = {}
+    real_build = sm.build_automator
+
+    def fake_build(settings, *, debug_port, profile_dir=None, chrome_path=None):
+        a = real_build(
+            settings, debug_port=debug_port,
+            profile_dir=profile_dir, chrome_path=chrome_path,
+        )
+        built["type"] = type(a).__name__
+        return a
+
+    monkeypatch.setattr(sm, "load_program_settings", fake_load)
+    monkeypatch.setattr(sm, "build_automator", fake_build)
+
+    repo = FakeRepo(_order())
+    backup = FakeBackup()
+    calls, notify = _spy_notify()
+    # automator 미주입 → 팩토리 경로
+    await sm.enqueue(7, repo=repo, backup=backup, notify=notify)
+
+    assert built["type"] == "ManualOnlyAutomator"
+    assert repo.statuses == [(7, "manual")]
+    assert backup.written == [7]

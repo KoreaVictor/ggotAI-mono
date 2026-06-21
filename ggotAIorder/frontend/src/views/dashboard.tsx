@@ -31,28 +31,19 @@ export function DashboardView() {
   const [dataError, setDataError] = useState('');
   const [loading, setLoading] = useState(true);
 
-  const checkServiceStatus = async () => {
-    if (!window.electronAPI) { setServiceStatus('STOPPED'); return; }
-    try {
-      const res = await window.electronAPI.getServiceStatus();
-      if (res.error) setStatusError(res.error);
-      setServiceStatus(res.status);
-    } catch { setServiceStatus('STOPPED'); }
-  };
-
+  // 수집엔진 상태는 백엔드 하트비트(get_dashboard.engine_alive)로 판정한다.
+  // Electron 데스크톱뿐 아니라 웹(브라우저)에서도 동일하게 동작한다.
   const fetchData = async () => {
     if (!shopKey || !readToken) { setDataError('세션이 만료되었습니다. 다시 로그인해주세요.'); setLoading(false); return; }
     const r = await getDashboard(rpc, shopKey, readToken);
     if (!r.ok || !r.data) { setDataError(r.reason === 'unauthorized' ? '세션이 만료되었습니다. 다시 로그인해주세요.' : '상황판 데이터를 불러오지 못했습니다.'); setLoading(false); return; }
-    setDataError(''); setData(r.data); setLoading(false);
+    setDataError(''); setData(r.data); setServiceStatus(r.data.engineAlive ? 'RUNNING' : 'STOPPED'); setLoading(false);
   };
 
   useEffect(() => {
-    checkServiceStatus();
     fetchData();
-    const svc = setInterval(checkServiceStatus, 2500);
     const poll = setInterval(fetchData, 2500);
-    return () => { clearInterval(svc); clearInterval(poll); };
+    return () => { clearInterval(poll); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopKey, readToken]);
 
@@ -62,7 +53,7 @@ export function DashboardView() {
     try {
       const res = await window.electronAPI.startService();
       if (!res.success) setStatusError(res.error || '서비스를 시작하지 못했습니다.');
-      await checkServiceStatus();
+      await fetchData();
     } catch (e) { setStatusError(e instanceof Error ? e.message : String(e)); }
     finally { setActionLoading(false); }
   };
@@ -72,13 +63,15 @@ export function DashboardView() {
     try {
       const res = await window.electronAPI.stopService();
       if (!res.success) setStatusError(res.error || '서비스를 중지하지 못했습니다.');
-      await checkServiceStatus();
+      await fetchData();
     } catch (e) { setStatusError(e instanceof Error ? e.message : String(e)); }
     finally { setActionLoading(false); }
   };
 
   const stats = data?.stats ?? { today_total: 0, rpa_success: 0, rpa_fail: 0, rpa_ready: 0 };
   const running = serviceStatus === 'RUNNING';
+  // 수집엔진 시작/중지 제어는 PC(데스크톱 앱)에서만 가능. 웹은 상태 조회 전용.
+  const isDesktop = typeof window !== 'undefined' && !!window.electronAPI;
 
   return (
     <div className="flex-1 overflow-y-auto px-6 py-8">
@@ -99,14 +92,18 @@ export function DashboardView() {
         </div>
         <div className="flex items-center gap-3 justify-end">
           {statusError && <div className="flex items-center gap-1 text-xs text-brand-error font-medium max-w-xs truncate" title={statusError}><ShieldAlert className="h-4 w-4 shrink-0" /><span>권한 부족/오류</span></div>}
-          {running ? (
-            <button onClick={handleStop} disabled={actionLoading} className="flex items-center gap-2 px-5 py-3 bg-brand-error hover:bg-brand-error/90 disabled:bg-brand-text-muted text-white text-sm font-bold rounded-xl shadow-lg transition">
-              <Square className="h-4 w-4 fill-current" /><span>주문 자동 수집 중지</span>
-            </button>
+          {isDesktop ? (
+            running ? (
+              <button onClick={handleStop} disabled={actionLoading} className="flex items-center gap-2 px-5 py-3 bg-brand-error hover:bg-brand-error/90 disabled:bg-brand-text-muted text-white text-sm font-bold rounded-xl shadow-lg transition">
+                <Square className="h-4 w-4 fill-current" /><span>주문 자동 수집 중지</span>
+              </button>
+            ) : (
+              <button onClick={handleStart} disabled={actionLoading || serviceStatus === 'NOT_INSTALLED'} className="flex items-center gap-2 px-5 py-3 bg-brand-success hover:bg-brand-success/90 disabled:bg-brand-text-muted text-brand-bg text-sm font-bold rounded-xl shadow-lg transition">
+                <Play className="h-4 w-4 fill-current" /><span>주문 자동 수집 시작</span>
+              </button>
+            )
           ) : (
-            <button onClick={handleStart} disabled={actionLoading || serviceStatus === 'NOT_INSTALLED'} className="flex items-center gap-2 px-5 py-3 bg-brand-success hover:bg-brand-success/90 disabled:bg-brand-text-muted text-brand-bg text-sm font-bold rounded-xl shadow-lg transition">
-              <Play className="h-4 w-4 fill-current" /><span>주문 자동 수집 시작</span>
-            </button>
+            <div className="text-xs text-brand-text-secondary">수집엔진 시작/중지는 매장 PC에서 제어됩니다.</div>
           )}
         </div>
       </div>

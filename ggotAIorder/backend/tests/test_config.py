@@ -77,3 +77,20 @@ def test_rpa_backup_dir_default():
 def test_rpa_backup_dir_override():
     cfg = load_config(env=dict(VALID, RPA_BACKUP_DIR="/tmp/custom-backups"))
     assert str(cfg.rpa_backup_dir).endswith("custom-backups")
+
+
+def test_rpa_profile_dir_and_debug_port_defaults():
+    cfg = load_config(env=VALID)
+    assert isinstance(cfg.rpa_profile_dir, Path)
+    assert cfg.flowernt_debug_port == 9222
+
+
+def test_rpa_profile_dir_and_port_from_env():
+    cfg = load_config(env=dict(VALID, RPA_PROFILE_DIR=r"C:\tmp\prof", RPA_DEBUG_PORT="9333"))
+    assert str(cfg.rpa_profile_dir).endswith("prof")
+    assert cfg.flowernt_debug_port == 9333
+
+
+def test_non_integer_debug_port_raises():
+    with pytest.raises(ConfigError):
+        load_config(env=dict(VALID, RPA_DEBUG_PORT="abc"))

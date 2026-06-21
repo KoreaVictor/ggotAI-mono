@@ -281,7 +281,13 @@ export type Database = {
           order_hp_2: string | null
           order_landline_1: string | null
           order_landline_2: string | null
+          rpa_auto_submit: string | null
+          rpa_enabled: string | null
           rpa_fail_message: string | null
+          rpa_login_id: string | null
+          rpa_login_password: string | null
+          rpa_program_type: string | null
+          rpa_program_url: string | null
           rpa_success_message: string | null
           shop_key: number
           shopping_mall_check_interval: number | null
@@ -302,7 +308,13 @@ export type Database = {
           order_hp_2?: string | null
           order_landline_1?: string | null
           order_landline_2?: string | null
+          rpa_auto_submit?: string | null
+          rpa_enabled?: string | null
           rpa_fail_message?: string | null
+          rpa_login_id?: string | null
+          rpa_login_password?: string | null
+          rpa_program_type?: string | null
+          rpa_program_url?: string | null
           rpa_success_message?: string | null
           shop_key: number
           shopping_mall_check_interval?: number | null
@@ -323,7 +335,13 @@ export type Database = {
           order_hp_2?: string | null
           order_landline_1?: string | null
           order_landline_2?: string | null
+          rpa_auto_submit?: string | null
+          rpa_enabled?: string | null
           rpa_fail_message?: string | null
+          rpa_login_id?: string | null
+          rpa_login_password?: string | null
+          rpa_program_type?: string | null
+          rpa_program_url?: string | null
           rpa_success_message?: string | null
           shop_key?: number
           shopping_mall_check_interval?: number | null

@@ -1,3 +1,4 @@
+import type React from 'react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { useSession } from '../session/SessionContext';
@@ -9,6 +10,16 @@ import {
 } from 'lucide-react';
 
 const rpc: DashRpc = (fn, args) => supabase.rpc(fn, args) as unknown as ReturnType<DashRpc>;
+
+// 날짜 입력칸 아무 곳이나 클릭하면 네이티브 달력이 열리게 한다(작은 아이콘 정조준 불필요).
+// showPicker 미지원 브라우저(구형 Safari 등)는 기존 달력 아이콘 클릭으로 폴백.
+function openDatePicker(e: React.MouseEvent<HTMLInputElement>) {
+  try {
+    e.currentTarget.showPicker();
+  } catch {
+    /* 미지원/이미 열림 — 무시 */
+  }
+}
 
 // 채널 세그먼트(전체 + 5채널). value=null 이면 전체. 핸드폰1·2는 '핸드폰' 공유.
 const CHANNEL_SEGMENTS: { label: string; value: string | null }[] = [
@@ -185,10 +196,12 @@ export function OrderListView() {
           <div className="flex items-center gap-2">
             <Calendar className="h-4 w-4 text-brand-text-muted" />
             <input type="date" value={startDate} max={endDate} onChange={(e) => setStartDate(e.target.value)}
-              className="bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text-primary outline-none focus:border-brand-primary" />
+              onClick={openDatePicker}
+              className="bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text-primary outline-none focus:border-brand-primary cursor-pointer" />
             <span className="text-brand-text-muted text-sm">~</span>
             <input type="date" value={endDate} min={startDate} onChange={(e) => setEndDate(e.target.value)}
-              className="bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text-primary outline-none focus:border-brand-primary" />
+              onClick={openDatePicker}
+              className="bg-brand-card border border-brand-border rounded-lg px-3 py-2 text-sm text-brand-text-primary outline-none focus:border-brand-primary cursor-pointer" />
             <button onClick={loadOrders}
               className="flex items-center gap-1.5 px-4 py-2 bg-brand-primary hover:bg-brand-primary-hover text-white text-xs font-semibold rounded-lg transition">
               <Search className="h-3.5 w-3.5" />조회

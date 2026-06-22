@@ -4,6 +4,7 @@ import { supabase } from '../supabase';
 import { useSession } from '../session/SessionContext';
 import { getOrders, requeueOrder, type OrderRow } from '../orders/client';
 import type { DashRpc } from '../dashboard/client';
+import { channelLabel } from '../dashboard/currentTask';
 import {
   Search, Eye, Play, CheckCircle2, XCircle, AlertCircle,
   MapPin, Calendar, User, ShoppingBag, X, RefreshCw,
@@ -28,7 +29,7 @@ const CHANNEL_SEGMENTS: { label: string; value: string | null }[] = [
   { label: '가게전화', value: '가게전화' },
   { label: '쇼핑몰', value: '쇼핑몰' },
   { label: '인터라넷', value: '인터라넷' },
-  { label: '가게음성', value: '가게음성' },
+  { label: '매장판매', value: '가게음성' },
 ];
 
 // 오늘(KST) 'YYYY-MM-DD'
@@ -272,7 +273,7 @@ export function OrderListView() {
                     </td>
                     <td className="px-5 py-4 text-right font-semibold text-brand-success">{(order.price ?? 0).toLocaleString()}원</td>
                     <td className="px-5 py-4 max-w-[180px] truncate"><span className="text-xs text-brand-text-secondary">{order.delivery_place}</span></td>
-                    <td className="px-5 py-4 text-center"><span className="text-xs text-brand-text-secondary">{order.channel_order ?? '-'}</span></td>
+                    <td className="px-5 py-4 text-center"><span className="text-xs text-brand-text-secondary">{order.channel_order ? channelLabel(order.channel_order) : '-'}</span></td>
                     <td className="px-5 py-4 text-center">{renderStatusBadge(order.rpa_status)}</td>
                     <td className="px-5 py-4 text-right" onClick={(e) => e.stopPropagation()}>
                       <div className="flex justify-end gap-2">
@@ -311,7 +312,7 @@ export function OrderListView() {
                 <ShoppingBag className="h-5 w-5 text-brand-primary" />
                 <h3 className="font-semibold text-brand-text-primary text-base">주문 상세 명세서</h3>
                 {renderStatusBadge(selectedOrder.rpa_status)}
-                <span className="text-xs text-brand-text-muted">({selectedOrder.channel_order ?? '-'})</span>
+                <span className="text-xs text-brand-text-muted">({selectedOrder.channel_order ? channelLabel(selectedOrder.channel_order) : '-'})</span>
               </div>
               <button onClick={() => setSelectedOrder(null)} className="p-1.5 hover:bg-brand-border rounded-lg text-brand-text-muted hover:text-brand-text-primary transition">
                 <X className="h-5 w-5" />

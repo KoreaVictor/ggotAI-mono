@@ -46,6 +46,26 @@ _SANG_DIVI_RULES: tuple[tuple[tuple[str, ...], str], ...] = (
 
 DEFAULT_SANG_DIVI = "기타"
 
+# FlowerNT3 상품분류(sang_divi) select 의 실제 옵션 텍스트(라이브 확인). AI 추출값이
+# 이 집합에 속할 때만 신뢰하고, 아니면(오타·자유서술·미상) 키워드 휴리스틱으로 폴백한다.
+SANG_DIVI_OPTIONS: frozenset[str] = frozenset({
+    "축하화환", "화분", "쌀화환", "근조화환", "동양란", "서양란",
+    "생화", "과일바구니", "축하오브제", "근조오브제", "기타",
+})
+
+
+def resolve_sang_divi(order: RpaOrder) -> str:
+    """주문의 상품분류를 결정한다. AI 추출값(order.sang_divi)이 유효 옵션이면 그걸
+    쓰고, 없거나 목록에 없으면 상품명 키워드 규칙(product_to_sang_divi)으로 폴백한다.
+
+    AI 분류는 STT 전체 맥락을 보므로 키워드보다 정확하지만, 환각·오타 위험이 있어
+    유효 옵션 화이트리스트로 검증한다 → 어떤 경우에도 기존 동작보다 나빠지지 않는다.
+    """
+    ai = (order.sang_divi or "").strip()
+    if ai in SANG_DIVI_OPTIONS:
+        return ai
+    return product_to_sang_divi(order.product_name)
+
 
 def product_to_sang_divi(product_name: str | None) -> str:
     """상품명 → 상품분류(sang_divi) 옵션 텍스트. 빈 상품명만 '', 그 외 미매칭은 '기타'.

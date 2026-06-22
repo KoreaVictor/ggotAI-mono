@@ -62,3 +62,17 @@ def test_payload_delivery_at_text_none_when_absent():
     ex = OrderExtraction(product_name="장미", delivery_at="2026-06-14T15:00:00+09:00")
     p = engine._build_order_payload(_row(), ex)
     assert p["delivery_at_text"] is None
+
+
+# ---- _build_order_payload: AI 추출 상품분류(sang_divi) 보관 ----
+
+def test_payload_carries_sang_divi():
+    ex = OrderExtraction(product_name="장미", price=1000, sang_divi="생화")
+    p = engine._build_order_payload(_row(), ex)
+    assert p["sang_divi"] == "생화"
+
+
+def test_payload_sang_divi_none_when_absent():
+    ex = OrderExtraction(product_name="장미", price=1000)
+    p = engine._build_order_payload(_row(), ex)
+    assert p["sang_divi"] is None

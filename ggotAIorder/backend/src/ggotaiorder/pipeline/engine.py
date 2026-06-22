@@ -122,6 +122,7 @@ def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
         "receiver_phone_number": extraction.receiver_phone_number or "",
         "ribbon_congratulations": extraction.ribbon_congratulations,
         "card_message": extraction.card_message,
+        "sang_divi": extraction.sang_divi,
         "rpa_status": "ready",
     }
 

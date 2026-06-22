@@ -49,8 +49,8 @@ def fill_order_form(frame, order: RpaOrder, *, auto_submit: bool) -> None:
         }""",
         target,
     )
-    # 1-b) 상품분류(sang_divi) select: 상품명 키워드로 분류해 옵션 텍스트로 선택(매칭 없으면 미선택)
-    category = mapping.product_to_sang_divi(order.product_name)
+    # 1-b) 상품분류(sang_divi) select: AI 추출 분류 우선, 없으면 상품명 키워드 폴백
+    category = mapping.resolve_sang_divi(order)
     if category:
         try:
             frame.select_option("select[name=sang_divi]", label=category)

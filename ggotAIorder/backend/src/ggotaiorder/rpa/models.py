@@ -29,3 +29,4 @@ class RpaOrder:
     ribbon_congratulations: str | None
     card_message: str | None
     delivery_at_text: str | None = None  # 배송시간 원본 문구(말한 그대로)
+    sang_divi: str | None = None         # AI 추출 상품분류(FlowerNT 옵션). 없으면 키워드 폴백

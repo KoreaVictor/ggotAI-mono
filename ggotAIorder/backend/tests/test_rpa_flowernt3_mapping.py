@@ -57,6 +57,29 @@ def test_product_to_sang_divi():
     assert m.product_to_sang_divi("행복나무") == "기타"
 
 
+def test_resolve_sang_divi_prefers_valid_ai_value():
+    # AI가 유효한 FlowerNT 분류를 주면 키워드 휴리스틱보다 우선한다.
+    # (상품명 키워드로는 '기타'가 될 상품도 AI 분류가 있으면 그대로 사용)
+    assert m.resolve_sang_divi(_order(sang_divi="동양란", product_name="알수없는상품")) == "동양란"
+    assert m.resolve_sang_divi(_order(sang_divi="과일바구니", product_name="장미")) == "과일바구니"
+
+
+def test_resolve_sang_divi_falls_back_to_keyword_when_ai_missing():
+    # AI값이 없으면(None/빈값) 기존 상품명 키워드 규칙으로 폴백 — 절대 퇴행 없음.
+    assert m.resolve_sang_divi(_order(sang_divi=None, product_name="장미 꽃다발")) == "생화"
+    assert m.resolve_sang_divi(_order(sang_divi="", product_name="근조화환")) == "근조화환"
+
+
+def test_resolve_sang_divi_falls_back_when_ai_value_invalid():
+    # AI가 목록에 없는 값(오타/자유서술)을 주면 신뢰하지 않고 키워드 폴백.
+    assert m.resolve_sang_divi(_order(sang_divi="꽃", product_name="과일바구니")) == "과일바구니"
+    assert m.resolve_sang_divi(_order(sang_divi="아무거나", product_name="알수없는상품")) == "기타"
+
+
+def test_resolve_sang_divi_empty_product_stays_empty():
+    assert m.resolve_sang_divi(_order(sang_divi=None, product_name="")) == ""
+
+
 def test_split_delivery_datetime():
     assert m.split_delivery_datetime("2026-06-20T15:30:00") == ("2026-06-20", "15:30")
     assert m.split_delivery_datetime("2026-06-20 09:05") == ("2026-06-20", "09:05")

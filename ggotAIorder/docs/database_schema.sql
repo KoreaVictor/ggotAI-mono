@@ -60,6 +60,7 @@ CREATE TABLE IF NOT EXISTS order_details (
     ribbon_sender TEXT,                            -- 리본문구_보내는사람
     ribbon_congratulations TEXT,                   -- 리본문구_경조사어
     card_message TEXT,                             -- 카드메세지 내용
+    sang_divi VARCHAR(20) DEFAULT NULL,            -- AI 추출 상품분류(FlowerNT sang_divi 옵션). 미상 시 NULL → RPA가 상품명 키워드로 폴백
     rpa_status VARCHAR(20) DEFAULT 'ready',        -- RPA 처리 상태 ('ready', 'success', 'manual'=미구동→백업/수동입력, 'fail')
     rpa_attempts INTEGER NOT NULL DEFAULT 0,       -- manual 자동재시도 횟수(상한 retry.RPA_MAX_ATTEMPTS 초과 시 수동입력으로 남김)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),

@@ -38,6 +38,14 @@ class OrderExtraction(BaseModel):
     receiver_phone_number: Optional[str] = Field(default=None, description="받는 사람 전화번호")
     ribbon_congratulations: Optional[str] = Field(default=None, description="리본 경조사 문구")
     card_message: Optional[str] = Field(default=None, description="카드 메시지")
+    sang_divi: Optional[str] = Field(
+        default=None,
+        description=(
+            "상품분류. 반드시 다음 중 하나만 사용한다: "
+            "축하화환/화분/쌀화환/근조화환/동양란/서양란/생화/과일바구니/축하오브제/근조오브제/기타. "
+            "상품명으로 분류가 불명확하면 '기타', 상품명 자체가 없으면 null."
+        ),
+    )
 
 
 @dataclass

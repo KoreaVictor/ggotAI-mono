@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { deriveCurrentTask, latestForChannel, CHANNELS } from './currentTask';
+import { deriveCurrentTask, latestForChannel, CHANNELS, channelLabel } from './currentTask';
 import type { FeedRow } from './client';
 
 function row(p: Partial<FeedRow>): FeedRow {
@@ -31,5 +31,18 @@ describe('CHANNELS', () => {
   it('핸드폰1·2는 같은 channelOrder 공유', () => {
     const hp = CHANNELS.filter((c) => c.channelOrder === '핸드폰');
     expect(hp.map((c) => c.label)).toEqual(['핸드폰1', '핸드폰2']);
+  });
+  it('가게음성 채널은 매장판매로 라벨 표기(channelOrder는 가게음성 유지)', () => {
+    const voice = CHANNELS.find((c) => c.channelOrder === '가게음성');
+    expect(voice?.label).toBe('매장판매');
+  });
+});
+
+describe('channelLabel', () => {
+  it('가게음성 → 매장판매', () => expect(channelLabel('가게음성')).toBe('매장판매'));
+  it('그 외 채널은 그대로', () => {
+    expect(channelLabel('핸드폰')).toBe('핸드폰');
+    expect(channelLabel('가게전화')).toBe('가게전화');
+    expect(channelLabel('쇼핑몰')).toBe('쇼핑몰');
   });
 });

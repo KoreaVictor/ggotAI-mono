@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { useSession } from '../session/SessionContext';
 import { getDashboard, type DashboardData, type DashRpc } from '../dashboard/client';
-import { CHANNELS, deriveCurrentTask, latestForChannel } from '../dashboard/currentTask';
+import { CHANNELS, deriveCurrentTask, latestForChannel, channelLabel } from '../dashboard/currentTask';
 import {
   Play, Square, RefreshCw, Phone, Smartphone, Globe, Radio, MessageSquare, ShieldAlert, Clock,
 } from 'lucide-react';
@@ -173,7 +173,7 @@ export function DashboardView() {
                   <div className="shrink-0 w-8 h-8 rounded-full bg-brand-card border border-brand-border flex items-center justify-center">{channelIcon(item.channel_order.startsWith('핸드폰') ? '핸드폰1' : item.channel_order)}</div>
                   <div className="flex-1 space-y-1.5">
                     <div className="flex items-center justify-between text-xs">
-                      <span className="font-semibold text-brand-text-primary">{item.customer_name ?? '고객'} 님 ({item.channel_order})</span>
+                      <span className="font-semibold text-brand-text-primary">{item.customer_name ?? '고객'} 님 ({channelLabel(item.channel_order)})</span>
                       <span className="text-[10px] text-brand-text-muted">{new Date(item.created_at).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}</span>
                     </div>
                     <p className="text-xs text-brand-text-secondary bg-brand-bg/50 p-2.5 rounded border border-brand-border/40 font-mono">{item.stt_text || '비정형 음성 원문 추출 대기중...'}</p>

@@ -10,6 +10,7 @@ import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
 import com.ggotai.hp.manager.DeviceStatus
 import com.ggotai.hp.manager.UploadManager
+import com.ggotai.hp.policy.CallSyncDecider
 import com.ggotai.hp.util.CallLogReader
 import com.ggotai.hp.util.CustomerResolver
 import kotlinx.coroutines.Dispatchers
@@ -53,12 +54,21 @@ class CallSyncWorker(
         val customerNumber = CustomerResolver.resolveNumber(callLog?.number)
         Log.d(TAG, "CallSyncWorker 시작 - 대상 번호: $customerNumber (CallLog name=${callLog?.cachedName})")
 
+        // [수정1] 미성사 통화(0초·부재중·거절·차단)는 새 녹음이 없으므로 수집하지 않는다.
+        // 안 받은 발신통화도 신호 송출 순간 OFFHOOK이라 통화종료 수집이 예약되는데, 그대로
+        // 진행하면 직전 통화 녹음이 현재 통화로 잘못 업로드된다. CallLog의 통화시간/타입으로 가린다.
+        if (!CallSyncDecider.isConnectedCall(callLog?.type, callLog?.durationSec ?: 0)) {
+            Log.d(TAG, "미성사 통화 — 수집 건너뜀 (type=${callLog?.type}, dur=${callLog?.durationSec})")
+            return@withContext Result.success()
+        }
+
         try {
             UploadManager.initTts(context)
-            
-            val recordFilePath = findLatestCallRecordFile()
-            
-            val prefs = context.getSharedPreferences("app_prefs", Context.MODE_PRIVATE)
+
+            val nowMs = System.currentTimeMillis()
+            val callStartMs = callLog?.dateMillis ?: 0L
+            val recordFilePath = findLatestCallRecordFile(callStartMs, nowMs)
+
             val userPhoneNumber = prefs.getString("USER_PHONE_NUMBER", "Unknown") ?: "Unknown"
             val currentDate = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault()).format(Date())
             val currentTime = SimpleDateFormat("HH:mm:ss", Locale.getDefault()).format(Date())
@@ -107,10 +117,9 @@ class CallSyncWorker(
         }
     }
 
-    private fun findLatestCallRecordFile(): String? {
+    private fun findLatestCallRecordFile(callStartMs: Long, nowMs: Long): String? {
         var latestFilePath: String? = null
         var latestTime = 0L
-        val timeThreshold = System.currentTimeMillis() - (10 * 60 * 1000)
 
         val possibleDirs = listOf(
             File(android.os.Environment.getExternalStorageDirectory(), "Call"),
@@ -132,7 +141,9 @@ class CallSyncWorker(
                     if (files != null) {
                         for (file in files) {
                             if (file.isFile && (file.name.endsWith(".m4a") || file.name.endsWith(".amr") || file.name.endsWith(".mp3") || file.name.endsWith(".wav"))) {
-                                if (file.lastModified() > latestTime && file.lastModified() > timeThreshold) {
+                                // [수정3] 시간창 이내 + 통화 시작 이후 파일만 인정(직전/오래된 녹음 배제)
+                                if (file.lastModified() > latestTime &&
+                                    CallSyncDecider.isRecordingForCall(file.lastModified(), callStartMs, nowMs)) {
                                     latestTime = file.lastModified()
                                     latestFilePath = file.absolutePath
                                 }
@@ -152,20 +163,34 @@ class CallSyncWorker(
 
         Log.d(TAG, "폴더 스캔 실패, MediaStore 백업 검색 시도...")
         val projection = arrayOf(MediaStore.Audio.Media.DATA, MediaStore.Audio.Media.DATE_ADDED)
+        // [수정2] 폴더 스캔과 동일한 시간창을 selection으로 적용한다.
+        // 기존엔 조건 없이 단말 전체 최신 오디오를 반환해, 새 녹음이 없으면 어제 녹음이 붙었다.
+        // DATE_ADDED 단위는 초(seconds)다.
+        val windowStartSec = (nowMs - CallSyncDecider.RECORDING_WINDOW_MS) / 1000L
+        val selection = "${MediaStore.Audio.Media.DATE_ADDED} >= ?"
+        val selectionArgs = arrayOf(windowStartSec.toString())
         val sortOrder = "${MediaStore.Audio.Media.DATE_ADDED} DESC"
-        
+
         try {
             context.contentResolver.query(
                 MediaStore.Audio.Media.EXTERNAL_CONTENT_URI,
                 projection,
-                null,
-                null,
+                selection,
+                selectionArgs,
                 sortOrder
             )?.use { cursor ->
                 if (cursor.moveToFirst()) {
                     val dataColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATA)
-                    latestFilePath = cursor.getString(dataColumn)
-                    Log.d(TAG, "MediaStore에서 찾은 최신 오디오 파일: $latestFilePath")
+                    val dateAddedColumn = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                    val candidate = cursor.getString(dataColumn)
+                    val dateAddedMs = cursor.getLong(dateAddedColumn) * 1000L
+                    // [수정3] 통화 시작 이후 여부까지 교차검증해야 채택한다.
+                    if (CallSyncDecider.isRecordingForCall(dateAddedMs, callStartMs, nowMs)) {
+                        latestFilePath = candidate
+                        Log.d(TAG, "MediaStore에서 찾은 최신 오디오 파일: $latestFilePath")
+                    } else {
+                        Log.d(TAG, "MediaStore 후보가 통화시각 범위 밖 — 무시: $candidate")
+                    }
                 }
             }
         } catch (e: Exception) {

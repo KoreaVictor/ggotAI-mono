@@ -59,6 +59,7 @@ def test_iwinv_builds_request_and_auth_header(monkeypatch):
 
     assert captured["url"] == "https://biz.service.iwinv.kr/api/send/"
     assert captured["headers"]["AUTH"] == base64.b64encode(b"secret-key").decode("ascii")
+    assert captured["headers"]["Content-Type"] == "application/json;charset=UTF-8"
     assert captured["json"]["templateCode"] == "TPL_OK"
     assert captured["json"]["reSend"] == "N"
     assert captured["json"]["list"] == [

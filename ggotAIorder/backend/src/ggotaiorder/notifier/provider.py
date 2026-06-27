@@ -102,3 +102,10 @@ class KakaoIwinvProvider:
         data = resp.json()
         if data.get("code") != 200 or data.get("fail", 0):
             raise RuntimeError(f"iwinv 발송 실패: {data}")
+
+
+def make_provider() -> NotificationProvider:
+    """env(NOTIFY_PROVIDER)로 발송 제공사를 선택한다."""
+    if os.getenv("NOTIFY_PROVIDER", "").lower() == "iwinv":
+        return KakaoIwinvProvider()
+    return HttpNotificationProvider()

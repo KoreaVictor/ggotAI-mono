@@ -8,6 +8,7 @@ from ggotaiorder.notifier.provider import (
     HttpNotificationProvider,
     KakaoIwinvProvider,
     _only_digits,
+    make_provider,
 )
 
 
@@ -107,3 +108,13 @@ def test_iwinv_raises_when_fail_count_nonzero(monkeypatch):
         KakaoIwinvProvider().send_message(
             "010-1111-2222", "x", template_code="T", variables={"건수": "1"}
         )
+
+
+def test_make_provider_returns_iwinv_when_configured(monkeypatch):
+    monkeypatch.setenv("NOTIFY_PROVIDER", "iwinv")
+    assert isinstance(make_provider(), KakaoIwinvProvider)
+
+
+def test_make_provider_defaults_to_http(monkeypatch):
+    monkeypatch.delenv("NOTIFY_PROVIDER", raising=False)
+    assert isinstance(make_provider(), HttpNotificationProvider)

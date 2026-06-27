@@ -6,6 +6,7 @@ HttpNotificationProvider 는 골격이며 실 발송에는 제공사 계정·승
 
 from __future__ import annotations
 
+import base64
 import logging
 import os
 from typing import Protocol
@@ -15,10 +16,22 @@ import httpx
 logger = logging.getLogger(__name__)
 
 
+def _only_digits(value: str) -> str:
+    """전화번호 등에서 숫자만 추출."""
+    return "".join(ch for ch in value if ch.isdigit())
+
+
 class NotificationProvider(Protocol):
     """단일 메시지 발송 계약."""
 
-    def send_message(self, to: str, text: str) -> None: ...
+    def send_message(
+        self,
+        to: str,
+        text: str,
+        *,
+        template_code: str | None = None,
+        variables: dict[str, str] | None = None,
+    ) -> None: ...
 
 
 class HttpNotificationProvider:
@@ -28,7 +41,14 @@ class HttpNotificationProvider:
     완성해야 한다(라이브 체크리스트). 미설정 시 RuntimeError.
     """
 
-    def send_message(self, to: str, text: str) -> None:
+    def send_message(
+        self,
+        to: str,
+        text: str,
+        *,
+        template_code: str | None = None,
+        variables: dict[str, str] | None = None,
+    ) -> None:
         api_url = os.getenv("NOTIFY_API_URL")
         api_key = os.getenv("NOTIFY_API_KEY")
         if not api_url or not api_key:

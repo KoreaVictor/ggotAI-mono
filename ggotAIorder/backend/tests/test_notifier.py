@@ -156,3 +156,4 @@ async def test_freetext_provider_ignores_missing_template_code(monkeypatch):
     result = await send(2, "가게전화", 1, "success", repo=repo, provider=provider)
     assert result is True
     assert provider.sent == [("010-1111-2222", "가게전화 주문 1건 입력 완료")]
+    assert provider.calls[0]["template_code"] is None

@@ -83,6 +83,7 @@ class KakaoIwinvProvider:
         api_key = os.getenv("IWINV_API_KEY")
         if not api_key:
             raise RuntimeError("IWINV_API_KEY 미설정 — 발송 불가")
+        # None 또는 빈 문자열이면 발송 불가
         if not template_code:
             raise RuntimeError("template_code 없음 — 알림톡 발송 불가")
 

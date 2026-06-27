@@ -84,7 +84,7 @@ def test_iwinv_raises_when_template_code_missing(monkeypatch):
         )
 
 
-def test_iwinv_raises_on_non_200_code(monkeypatch):
+def test_iwinv_raises_on_non_200_json_code(monkeypatch):
     monkeypatch.setenv("IWINV_API_KEY", "secret-key")
     monkeypatch.setattr(
         provider_mod.httpx,
@@ -108,6 +108,26 @@ def test_iwinv_raises_when_fail_count_nonzero(monkeypatch):
         KakaoIwinvProvider().send_message(
             "010-1111-2222", "x", template_code="T", variables={"건수": "1"}
         )
+
+
+def test_iwinv_raises_on_http_error_status(monkeypatch):
+    monkeypatch.setenv("IWINV_API_KEY", "secret-key")
+    monkeypatch.setattr(
+        provider_mod.httpx,
+        "post",
+        lambda url, headers=None, json=None, timeout=None: httpx.Response(
+            500, request=httpx.Request("POST", url)
+        ),
+    )
+    with pytest.raises(httpx.HTTPStatusError):
+        KakaoIwinvProvider().send_message(
+            "010-1111-2222", "x", template_code="T", variables={"건수": "1"}
+        )
+
+
+def test_make_provider_iwinv_is_case_insensitive(monkeypatch):
+    monkeypatch.setenv("NOTIFY_PROVIDER", "IWINV")
+    assert isinstance(make_provider(), KakaoIwinvProvider)
 
 
 def test_make_provider_returns_iwinv_when_configured(monkeypatch):

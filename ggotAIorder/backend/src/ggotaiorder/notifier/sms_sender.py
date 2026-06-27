@@ -9,8 +9,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 
-from ggotaiorder.notifier.provider import HttpNotificationProvider, NotificationProvider
+from ggotaiorder.notifier.provider import NotificationProvider, make_provider
 from ggotaiorder.notifier.repository import NotifierRepository, SupabaseNotifierRepository
 
 logger = logging.getLogger(__name__)
@@ -42,6 +43,20 @@ def _template_for(settings: "object", outcome: str) -> str:
     return settings.rpa_fail_message
 
 
+# outcome → iwinv 템플릿 코드 env 이름.
+_TEMPLATE_CODE_ENV = {
+    _OUTCOME_SUCCESS: "IWINV_TEMPLATE_CODE_SUCCESS",
+    _OUTCOME_MANUAL: "IWINV_TEMPLATE_CODE_MANUAL",
+    _OUTCOME_FAIL: "IWINV_TEMPLATE_CODE_FAIL",
+}
+
+
+def _template_code_for(outcome: str) -> str | None:
+    """outcome에 해당하는 승인된 알림톡 templateCode(env)를 읽는다."""
+    env_name = _TEMPLATE_CODE_ENV.get(outcome)
+    return os.getenv(env_name) if env_name else None
+
+
 async def send(
     shop_key: int,
     channel: str,
@@ -58,7 +73,7 @@ async def send(
     실제 발송 시 True, 스킵/실패 시 False.
     """
     repo = repo or SupabaseNotifierRepository()
-    provider = provider or HttpNotificationProvider()
+    provider = provider or make_provider()
 
     settings = await asyncio.to_thread(repo.get_settings, shop_key)
     if settings is None:
@@ -80,8 +95,24 @@ async def send(
         logger.warning("빈 메시지 — 발송 스킵 shop_key=%s", shop_key)
         return False
 
+    template_code = _template_code_for(outcome)
+    variables = {"건수": str(count)}
+    if getattr(provider, "requires_template_code", False) and not template_code:
+        logger.info(
+            "알림톡 templateCode 없음(outcome=%s) — 발송 스킵 shop_key=%s",
+            outcome,
+            shop_key,
+        )
+        return False
+
     try:
-        await asyncio.to_thread(provider.send_message, recipient, text)
+        await asyncio.to_thread(
+            provider.send_message,
+            recipient,
+            text,
+            template_code=template_code,
+            variables=variables,
+        )
     except Exception:
         logger.exception("알림 발송 실패 shop_key=%s to=%s", shop_key, _mask(recipient))
         return False

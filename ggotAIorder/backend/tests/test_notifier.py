@@ -140,6 +140,28 @@ async def test_success_passes_template_code_and_variables(monkeypatch):
     assert provider.calls[0]["variables"] == {"건수": "1"}
 
 
+async def test_neutral_template_code_env_is_honored(monkeypatch):
+    # provider 중립 env(NOTIFY_TEMPLATE_CODE_*)도 인식해야 한다(비즈엠 등).
+    monkeypatch.delenv("IWINV_TEMPLATE_CODE_SUCCESS", raising=False)
+    monkeypatch.setenv("NOTIFY_TEMPLATE_CODE_SUCCESS", "TPL_NEUTRAL")
+    repo = FakeRepo(_settings())
+    provider = FakeProvider(requires_template_code=True)
+    result = await send(2, "가게전화", 1, "success", repo=repo, provider=provider)
+    assert result is True
+    assert provider.calls[0]["template_code"] == "TPL_NEUTRAL"
+
+
+async def test_legacy_iwinv_template_code_env_still_works(monkeypatch):
+    # 기존 IWINV_TEMPLATE_CODE_* 도 폴백으로 계속 동작해야 한다.
+    monkeypatch.delenv("NOTIFY_TEMPLATE_CODE_SUCCESS", raising=False)
+    monkeypatch.setenv("IWINV_TEMPLATE_CODE_SUCCESS", "TPL_LEGACY")
+    repo = FakeRepo(_settings())
+    provider = FakeProvider(requires_template_code=True)
+    result = await send(2, "가게전화", 1, "success", repo=repo, provider=provider)
+    assert result is True
+    assert provider.calls[0]["template_code"] == "TPL_LEGACY"
+
+
 async def test_template_provider_skips_when_code_missing(monkeypatch):
     monkeypatch.delenv("IWINV_TEMPLATE_CODE_FAIL", raising=False)
     repo = FakeRepo(_settings())

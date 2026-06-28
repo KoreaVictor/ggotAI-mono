@@ -43,18 +43,23 @@ def _template_for(settings: "object", outcome: str) -> str:
     return settings.rpa_fail_message
 
 
-# outcome → iwinv 템플릿 코드 env 이름.
+# outcome → 알림톡 템플릿 코드 env 이름(우선순위 순).
+# provider 중립 NOTIFY_TEMPLATE_CODE_* 를 우선 쓰고, 기존 IWINV_TEMPLATE_CODE_* 는
+# 하위호환 폴백으로 유지한다.
 _TEMPLATE_CODE_ENV = {
-    _OUTCOME_SUCCESS: "IWINV_TEMPLATE_CODE_SUCCESS",
-    _OUTCOME_MANUAL: "IWINV_TEMPLATE_CODE_MANUAL",
-    _OUTCOME_FAIL: "IWINV_TEMPLATE_CODE_FAIL",
+    _OUTCOME_SUCCESS: ("NOTIFY_TEMPLATE_CODE_SUCCESS", "IWINV_TEMPLATE_CODE_SUCCESS"),
+    _OUTCOME_MANUAL: ("NOTIFY_TEMPLATE_CODE_MANUAL", "IWINV_TEMPLATE_CODE_MANUAL"),
+    _OUTCOME_FAIL: ("NOTIFY_TEMPLATE_CODE_FAIL", "IWINV_TEMPLATE_CODE_FAIL"),
 }
 
 
 def _template_code_for(outcome: str) -> str | None:
     """outcome에 해당하는 승인된 알림톡 templateCode(env)를 읽는다."""
-    env_name = _TEMPLATE_CODE_ENV.get(outcome)
-    return os.getenv(env_name) if env_name else None
+    for env_name in _TEMPLATE_CODE_ENV.get(outcome, ()):
+        value = os.getenv(env_name)
+        if value:
+            return value
+    return None
 
 
 async def send(

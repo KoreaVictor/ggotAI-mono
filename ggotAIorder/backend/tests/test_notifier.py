@@ -12,14 +12,21 @@ class FakeRepo:
 
 
 class FakeProvider:
-    def __init__(self, raises=False):
-        self.sent = []
-        self._raises = raises
+    requires_template_code = False
 
-    def send_message(self, to, text):
+    def __init__(self, raises=False, requires_template_code=False):
+        self.sent = []
+        self.calls = []
+        self._raises = raises
+        self.requires_template_code = requires_template_code
+
+    def send_message(self, to, text, *, template_code=None, variables=None):
         if self._raises:
             raise RuntimeError("provider down")
         self.sent.append((to, text))
+        self.calls.append(
+            {"to": to, "text": text, "template_code": template_code, "variables": variables}
+        )
 
 
 def _settings(**kw):
@@ -121,3 +128,32 @@ def test_mask_exposes_last_4_digits_only():
     from ggotaiorder.notifier.sms_sender import _mask
     assert _mask("010-1234-5678") == "***5678"
     assert _mask("ab") == "***"
+
+
+async def test_success_passes_template_code_and_variables(monkeypatch):
+    monkeypatch.setenv("IWINV_TEMPLATE_CODE_SUCCESS", "TPL_SUCCESS")
+    repo = FakeRepo(_settings())
+    provider = FakeProvider(requires_template_code=True)
+    result = await send(2, "가게전화", 1, "success", repo=repo, provider=provider)
+    assert result is True
+    assert provider.calls[0]["template_code"] == "TPL_SUCCESS"
+    assert provider.calls[0]["variables"] == {"건수": "1"}
+
+
+async def test_template_provider_skips_when_code_missing(monkeypatch):
+    monkeypatch.delenv("IWINV_TEMPLATE_CODE_FAIL", raising=False)
+    repo = FakeRepo(_settings())
+    provider = FakeProvider(requires_template_code=True)
+    result = await send(2, "가게전화", 1, "fail", repo=repo, provider=provider)
+    assert result is False
+    assert provider.sent == []
+
+
+async def test_freetext_provider_ignores_missing_template_code(monkeypatch):
+    monkeypatch.delenv("IWINV_TEMPLATE_CODE_SUCCESS", raising=False)
+    repo = FakeRepo(_settings())
+    provider = FakeProvider(requires_template_code=False)
+    result = await send(2, "가게전화", 1, "success", repo=repo, provider=provider)
+    assert result is True
+    assert provider.sent == [("010-1111-2222", "가게전화 주문 1건 입력 완료")]
+    assert provider.calls[0]["template_code"] is None

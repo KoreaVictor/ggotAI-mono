@@ -105,8 +105,62 @@ class KakaoIwinvProvider:
             raise RuntimeError(f"iwinv 발송 실패: {data}")
 
 
+class KakaoBizmProvider:
+    """비즈엠(스윗트래커) 알림톡 발송 제공사.
+
+    iwinv 와 달리 서버가 템플릿을 렌더링하지 않고, 완성된 문구(msg)를 그대로
+    보낸다. 따라서 승인된 템플릿의 고정문구와 msg 가 일치해야 발송된다.
+    발신프로필키(profile, 카카오 채널 등록 시 발급)와 승인된 tmplId 가 필요하다.
+    """
+
+    API_URL = "https://alimtalk-api.bizmsg.kr/v2/sender/send"
+    requires_template_code = True
+
+    def send_message(
+        self,
+        to: str,
+        text: str,
+        *,
+        template_code: str | None = None,
+        variables: dict[str, str] | None = None,
+    ) -> None:
+        user_id = os.getenv("BIZM_USER_ID")
+        if not user_id:
+            raise RuntimeError("BIZM_USER_ID 미설정 — 발송 불가")
+        profile_key = os.getenv("BIZM_PROFILE_KEY")
+        if not profile_key:
+            raise RuntimeError("BIZM_PROFILE_KEY 미설정 — 발송 불가")
+        if not template_code:
+            raise RuntimeError("template_code 없음 — 알림톡 발송 불가")
+
+        # body 는 JSON Array(최대 100건). 완성된 문구(text)를 msg 로 그대로 보낸다.
+        payload = [
+            {
+                "message_type": "AT",
+                "phn": _only_digits(to),
+                "profile": profile_key,
+                "tmplId": template_code,
+                "msg": text,
+                "reserveDt": "00000000000000",
+            }
+        ]
+        resp = httpx.post(
+            self.API_URL,
+            headers={"userid": user_id, "Content-Type": "application/json"},
+            json=payload,
+            timeout=10.0,
+        )
+        resp.raise_for_status()
+        results = resp.json()
+        if not all(item.get("code") == "success" for item in results):
+            raise RuntimeError(f"bizm 발송 실패: {results}")
+
+
 def make_provider() -> NotificationProvider:
     """env(NOTIFY_PROVIDER)로 발송 제공사를 선택한다."""
-    if os.getenv("NOTIFY_PROVIDER", "").lower() == "iwinv":
+    selected = os.getenv("NOTIFY_PROVIDER", "").lower()
+    if selected == "iwinv":
         return KakaoIwinvProvider()
+    if selected == "bizm":
+        return KakaoBizmProvider()
     return HttpNotificationProvider()

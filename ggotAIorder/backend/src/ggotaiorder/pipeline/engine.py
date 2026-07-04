@@ -10,10 +10,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from datetime import datetime, timedelta, timezone
 
 from ggotaiorder.pipeline.extractor import extract_order
-from ggotaiorder.pipeline.models import DELIVERY_AT_UNKNOWN, CallHistory, OrderExtraction
+from ggotaiorder.pipeline.models import OrderExtraction
+from ggotaiorder.pipeline.order_payload import (
+    build_order_payload,
+    normalize_delivery_at,
+    resolve_delivery_at,
+)
 from ggotaiorder.pipeline.repository import OrderRepository, SupabaseOrderRepository
 from ggotaiorder.pipeline.stt import transcribe
 from ggotaiorder.rpa.singleton_macro import enqueue
@@ -30,11 +34,6 @@ ORDER_FIELDS = (
 
 # Realtime이 직접 처리하는 채널 (catch-up 스캔도 같은 집합을 사용 — 단일 출처).
 REALTIME_CHANNELS = {"핸드폰", "가게음성"}
-
-# 매장판매(즉석 판매) 채널. 배송일 미상 시 주문일(오늘)로 채운다.
-STORE_SALE_CHANNEL = "가게음성"
-
-_KST = timezone(timedelta(hours=9))
 
 # 영구 실패 행의 무한 재시도 차단 상한 (catch-up 스캔과 공유)
 MAX_ATTEMPTS = 5
@@ -70,61 +69,10 @@ def is_order(extraction: OrderExtraction) -> bool:
     return has_product and has_price
 
 
-def _normalize_delivery_at(value: str | None) -> str:
-    """배달일시를 유효한 timestamptz 문자열로 정규화한다.
-
-    Gemini가 ISO 8601 을 주면 그대로, 자연어("내일 오후 3시")거나 비어 있으면
-    센티넬로 폴백해 INSERT(NOT NULL) 가 절대 깨지지 않게 한다(원문은 delivery_at_text 보존).
-    """
-    if value:
-        try:
-            datetime.fromisoformat(value)
-            return value
-        except ValueError:
-            logger.info("delivery_at 파싱 불가 — 센티넬 폴백: %r", value)
-    return DELIVERY_AT_UNKNOWN
-
-
-def _resolve_delivery_at(row: CallHistory, extraction: OrderExtraction) -> str:
-    """배송일시 결정. 매장판매는 배송일 미상 시 주문일(오늘 KST)로 채운다.
-
-    매장판매(가게음성)는 즉석 판매라 배송일=주문일이다. 센티넬(2099)로 두면
-    FlowerNT 등록 시 주문목록(오늘/이번주 화면)에 안 보이므로 오늘로 보정한다.
-    그 외 채널은 기존대로 센티넬 유지(사장님 수동 보정 대상).
-    """
-    resolved = _normalize_delivery_at(extraction.delivery_at)
-    if resolved == DELIVERY_AT_UNKNOWN and row.channel_order == STORE_SALE_CHANNEL:
-        return datetime.now(_KST).isoformat()
-    return resolved
-
-
-def _build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
-    """추출 결과 + 수집 이력으로 order_details INSERT payload 를 만든다.
-
-    order_details 의 NOT NULL·DEFAULT 없는 컬럼은 미상 시 안전 기본값으로 채운다
-    (설계서 §6: product_name/delivery_at/delivery_place/receiver_* NN 위반 방지).
-    """
-    return {
-        "call_history_id": row.id,
-        "shop_key": row.shop_key,
-        "shop_name": row.shop_name,
-        "customer_name": extraction.customer_name or row.customer_name or "신규",
-        "customer_phone_number": (
-            extraction.customer_phone_number or row.customer_phone_number or ""
-        ),
-        "product_name": extraction.product_name or "미정",
-        "quantity": extraction.quantity if extraction.quantity is not None else 1,
-        "price": extraction.price if extraction.price is not None else 0,
-        "delivery_at": _resolve_delivery_at(row, extraction),
-        "delivery_at_text": extraction.delivery_at_text,
-        "delivery_place": extraction.delivery_place or "미정",
-        "receiver_name": extraction.receiver_name or "미정",
-        "receiver_phone_number": extraction.receiver_phone_number or "",
-        "ribbon_congratulations": extraction.ribbon_congratulations,
-        "card_message": extraction.card_message,
-        "sang_divi": extraction.sang_divi,
-        "rpa_status": "ready",
-    }
+# 하위호환 별칭(기존 호출부·테스트가 engine._build_order_payload 등을 참조).
+_normalize_delivery_at = normalize_delivery_at
+_resolve_delivery_at = resolve_delivery_at
+_build_order_payload = build_order_payload
 
 
 async def process(call_history_id: int, repo: OrderRepository | None = None) -> None:

@@ -11,6 +11,8 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from ggotaiorder.config import load_config
+from ggotaiorder.core.crypto import decrypt
 from ggotaiorder.mall.credentials_repo import (
     MallCredentialRepository,
     SupabaseMallCredentialRepository,
@@ -48,6 +50,7 @@ class MallConfirmScanner:
         if not targets:
             return 0
 
+        cfg = load_config()
         creds = await asyncio.to_thread(cred_repo.list_credentials, PROVIDER_SMARTSTORE)
         creds_by_shop = {c.shop_key: c for c in creds}
 
@@ -62,6 +65,7 @@ class MallConfirmScanner:
                 order_repo.increment_ack_attempts, t.order_id
             )
             try:
+                cred.client_secret = decrypt(cred.enc_client_secret, cfg.aes_encryption_key)
                 await asyncio.to_thread(client.confirm_order, cred, t.product_order_id)
                 await asyncio.to_thread(order_repo.mark_ack, t.order_id, "confirmed")
             except Exception:

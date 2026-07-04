@@ -1,5 +1,10 @@
+import ggotaiorder.mall.confirm_scanner as confirm_scanner_mod
 from ggotaiorder.mall.confirm_scanner import MallConfirmScanner
 from ggotaiorder.mall.models import ConfirmTarget, MallCredential
+
+
+def _patch_decrypt(monkeypatch):
+    monkeypatch.setattr(confirm_scanner_mod, "decrypt", lambda enc, key: "plain-secret")
 
 
 def _cred(shop_key=1):
@@ -50,7 +55,8 @@ class FakeClient:
         raise AssertionError("scanner 는 fetch 하지 않는다")
 
 
-async def test_confirms_success_pending_target():
+async def test_confirms_success_pending_target(monkeypatch):
+    _patch_decrypt(monkeypatch)
     order_repo = FakeOrderRepo([ConfirmTarget(order_id=10, shop_key=1, product_order_id="PO1", ack_attempts=0)])
     client = FakeClient()
     scanner = MallConfirmScanner()
@@ -64,7 +70,8 @@ async def test_confirms_success_pending_target():
     assert order_repo.acks == [(10, "confirmed")]
 
 
-async def test_confirm_failure_retries_until_cap_then_skips():
+async def test_confirm_failure_retries_until_cap_then_skips(monkeypatch):
+    _patch_decrypt(monkeypatch)
     # ack_attempts=4 → increment 로 5(=상한) 도달, confirm 예외 → skipped
     order_repo = FakeOrderRepo([ConfirmTarget(order_id=10, shop_key=1, product_order_id="PO1", ack_attempts=4)])
     client = FakeClient(raises=True)
@@ -77,7 +84,8 @@ async def test_confirm_failure_retries_until_cap_then_skips():
     assert order_repo.acks == [(10, "skipped")]
 
 
-async def test_confirm_failure_below_cap_no_skip():
+async def test_confirm_failure_below_cap_no_skip(monkeypatch):
+    _patch_decrypt(monkeypatch)
     order_repo = FakeOrderRepo([ConfirmTarget(order_id=10, shop_key=1, product_order_id="PO1", ack_attempts=0)])
     client = FakeClient(raises=True)
     scanner = MallConfirmScanner()
@@ -89,7 +97,8 @@ async def test_confirm_failure_below_cap_no_skip():
     assert order_repo.acks == []  # 아직 상한 미만 → 다음 주기 재시도
 
 
-async def test_missing_cred_shop_skipped():
+async def test_missing_cred_shop_skipped(monkeypatch):
+    _patch_decrypt(monkeypatch)
     order_repo = FakeOrderRepo([ConfirmTarget(order_id=10, shop_key=99, product_order_id="PO1", ack_attempts=0)])
     client = FakeClient()
     scanner = MallConfirmScanner()
@@ -100,3 +109,23 @@ async def test_missing_cred_shop_skipped():
 
     assert client.confirmed == []
     assert order_repo.acks == []
+
+
+async def test_decrypts_and_injects_secret_before_confirm(monkeypatch):
+    _patch_decrypt(monkeypatch)
+    order_repo = FakeOrderRepo([ConfirmTarget(order_id=10, shop_key=1, product_order_id="PO1", ack_attempts=0)])
+    client = FakeClient()
+    recorded_secrets = []
+
+    def _confirm_order(cred, product_order_id):
+        recorded_secrets.append(cred.client_secret)
+        client.confirmed.append((cred.shop_key, product_order_id))
+
+    client.confirm_order = _confirm_order
+    scanner = MallConfirmScanner()
+
+    await scanner.scan_once(
+        order_repo=order_repo, client=client, cred_repo=FakeCredRepo([_cred(1)])
+    )
+
+    assert recorded_secrets == ["plain-secret"]

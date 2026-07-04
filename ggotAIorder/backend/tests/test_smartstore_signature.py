@@ -1,8 +1,5 @@
 import base64
 
-import pytest
-
-from ggotaiorder.mall.models import MallCredential
 from ggotaiorder.mall.smartstore_client import HttpSmartStoreClient
 
 # 유효한 bcrypt salt(네이버 client_secret 은 이 형식). 결정성 검증용 고정값.
@@ -31,13 +28,5 @@ def test_signature_changes_with_timestamp():
     assert a != b
 
 
-def test_fetch_and_confirm_are_stubbed():
-    c = HttpSmartStoreClient()
-    cred = MallCredential(
-        shop_key=1, shop_name="꽃집", provider="smartstore",
-        client_id="cid", enc_client_secret="enc", extra={},
-    )
-    with pytest.raises(NotImplementedError):
-        c.fetch_new_orders(cred)
-    with pytest.raises(NotImplementedError):
-        c.confirm_order(cred, "PO1")
+# fetch_new_orders/confirm_order 의 실 HTTP 동작은 test_smartstore_client_http.py 참조
+# (과거 NotImplementedError 스텁 테스트는 실 구현으로 대체되어 제거됨).

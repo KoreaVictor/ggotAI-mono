@@ -14,6 +14,8 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from ggotaiorder.api.routes import create_app
 from ggotaiorder.config import load_config
 from ggotaiorder.core.heartbeat import record_heartbeat
+from ggotaiorder.mall.collector import poll_once as mall_poll_once
+from ggotaiorder.mall.confirm_scanner import MallConfirmScanner
 from ggotaiorder.pipeline.catchup import CatchupScanner
 from ggotaiorder.realtime.listener import RealtimeListener
 from ggotaiorder.rpa.retry import RpaRetryScanner
@@ -30,6 +32,12 @@ _CATCHUP_INTERVAL_MIN = 30
 # manual(미구동) RPA 주문 재시도 주기(분). 상한(retry.RPA_MAX_ATTEMPTS)까지 따라잡는다.
 _RPA_RETRY_INTERVAL_MIN = 5
 
+# 스마트스토어 커머스API 폴링 주기(분). 후속: setting_info 값으로 동적화.
+_SMARTSTORE_INTERVAL_MIN = 10
+
+# 발주확인 스캔 주기(분). RPA 성공분을 이 간격으로 승인한다.
+_MALL_CONFIRM_INTERVAL_MIN = 5
+
 # 하트비트 주기(초). 상황판은 최근 90초 내 신호로 '가동중'을 판정한다(get_dashboard).
 _HEARTBEAT_INTERVAL_SEC = 20
 
@@ -45,6 +53,7 @@ class Orchestrator:
         self._listener = RealtimeListener()
         self._scanner = CatchupScanner()
         self._rpa_retry = RpaRetryScanner()
+        self._mall_confirm = MallConfirmScanner()
         self._scheduler = AsyncIOScheduler()
         self._server: uvicorn.Server | None = None
 
@@ -88,6 +97,26 @@ class Orchestrator:
             await self._rpa_retry.scan_once()
         except Exception:
             logger.exception("RPA 재시도 스캔 실패(다음 주기에 재시도)")
+
+    async def _scheduled_mall_poll(self) -> None:
+        """일시정지가 아니면 스마트스토어를 1회 폴링한다."""
+        if self._paused:
+            logger.debug("paused 상태 — 스마트스토어 폴링 스킵")
+            return
+        try:
+            await mall_poll_once()
+        except Exception:
+            logger.exception("스마트스토어 폴링 실패(다음 주기에 재시도)")
+
+    async def _scheduled_mall_confirm(self) -> None:
+        """일시정지가 아니면 발주확인 스캔을 1회 수행한다."""
+        if self._paused:
+            logger.debug("paused 상태 — 발주확인 스킵")
+            return
+        try:
+            await self._mall_confirm.scan_once()
+        except Exception:
+            logger.exception("발주확인 스캔 실패(다음 주기에 재시도)")
 
     async def _heartbeat(self) -> None:
         """수집엔진 생존 신호를 기록한다(paused 와 무관 — 프로세스 생존이 기준)."""
@@ -135,6 +164,25 @@ class Orchestrator:
             "interval",
             minutes=_RPA_RETRY_INTERVAL_MIN,
             id="rpa_retry",
+            max_instances=1,
+            coalesce=True,
+        )
+        # 스마트스토어 커머스API 폴링(신규주문 수집).
+        self._scheduler.add_job(
+            self._scheduled_mall_poll,
+            "interval",
+            minutes=_SMARTSTORE_INTERVAL_MIN,
+            id="smartstore_poll",
+            max_instances=1,
+            coalesce=True,
+        )
+        # 발주확인: 부팅 1회 + 주기적으로(RPA 성공분 승인).
+        self._scheduler.add_job(self._scheduled_mall_confirm, "date", id="mall_confirm_boot")
+        self._scheduler.add_job(
+            self._scheduled_mall_confirm,
+            "interval",
+            minutes=_MALL_CONFIRM_INTERVAL_MIN,
+            id="mall_confirm",
             max_instances=1,
             coalesce=True,
         )

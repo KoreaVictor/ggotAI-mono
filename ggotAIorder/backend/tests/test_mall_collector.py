@@ -218,6 +218,41 @@ async def test_success_resets_failure_counter(monkeypatch):
     assert notified == []
 
 
+async def test_per_order_insert_failure_holds_cursor(monkeypatch):
+    """2건 배치 중 두번째 insert_order_details 가 실패하면: 커서 미갱신 + 첫 주문은 정상 적재."""
+    enqueued = _patch_common(monkeypatch)
+    collector_mod._failure_counts.clear()
+    cred = _cred()
+    cred_repo = FakeCredRepo([cred])
+
+    class FlakyOrderRepo(FakeOrderRepo):
+        def __init__(self):
+            super().__init__()
+            self._order_insert_count = 0
+
+        def insert_order_details(self, payload):
+            self._order_insert_count += 1
+            if self._order_insert_count == 2:
+                raise RuntimeError("db insert failed")
+            return super().insert_order_details(payload)
+
+    order_repo = FlakyOrderRepo()
+    client = FakeClient({1: [_order("PO1"), _order("PO2")]}, cursor="C-NEXT")
+
+    await poll_once(
+        cred_repo=cred_repo, order_repo=order_repo, client=client,
+        notify=_make_notify([]), extract=_fake_extract_factory(OrderExtraction()),
+    )
+
+    # 커서는 갱신되지 않아야 함(다음 폴링이 재시도)
+    assert cred_repo.cursor_updates == []
+    # 첫 주문은 정상 적재+enqueue(유실 없음)
+    order_payloads = [c[1] for c in order_repo.calls if c[0] == "order"]
+    assert len(order_payloads) == 1
+    assert order_payloads[0]["receiver_name"] == "박영희"
+    assert len(enqueued) == 1
+
+
 async def test_multiple_shops_isolated(monkeypatch):
     enqueued = _patch_common(monkeypatch)
     collector_mod._failure_counts.clear()

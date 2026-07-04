@@ -147,6 +147,7 @@ async def poll_once(
 
         _failure_counts[cred.shop_key] = 0
 
+        had_failure = False
         for order in orders:
             try:
                 if await asyncio.to_thread(
@@ -163,11 +164,17 @@ async def poll_once(
                 )
                 await enqueue(order_id)
             except Exception:
+                had_failure = True
                 logger.exception(
                     "스마트스토어 주문 적재 실패 shop_key=%s po=%s",
                     cred.shop_key, order.product_order_id,
                 )
 
-        await asyncio.to_thread(
-            cred_repo.update_cursor, cred.shop_key, PROVIDER_SMARTSTORE, next_cursor
-        )
+        if not had_failure:
+            await asyncio.to_thread(
+                cred_repo.update_cursor, cred.shop_key, PROVIDER_SMARTSTORE, next_cursor
+            )
+        else:
+            logger.warning(
+                "일부 주문 적재 실패 — 커서 미갱신(다음 폴링 재시도) shop_key=%s", cred.shop_key
+            )

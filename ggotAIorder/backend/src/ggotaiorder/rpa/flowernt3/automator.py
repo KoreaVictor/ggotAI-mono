@@ -223,6 +223,46 @@ class FlowerNt3Automator:
                 return f
         return None
 
+    def _goto_order(self, page):
+        """콘텐츠 프레임(flowernt3Main)을 주문폼(order3.asp)으로 이동하고 그 프레임을 반환.
+
+        콘텐츠 프레임이 없으면 main.asp를 먼저 로드해 프레임셋을 세운다. 최상위 page를
+        직접 order3로 옮기면 프레임셋이 깨져 inputform이 사라지므로 반드시 프레임 안에서 연다.
+        프레임셋 자체가 없으면(하드 로그아웃 시 main.asp가 login으로 튕겨 프레임 미생성) None.
+        """
+        content = self._content_frame(page)
+        if content is None:
+            page.goto(self._main_url(), wait_until="domcontentloaded")
+            page.wait_for_timeout(1000)
+            content = self._content_frame(page)
+        if content is None:
+            return None
+        content.goto(self._order_url(), wait_until="domcontentloaded")
+        return self._content_frame(page) or page.main_frame
+
+    def _on_order_form(self, frame) -> bool:
+        """프레임이 실제 주문폼(order3.asp)에 있는지. 세션 만료 시 login.asp로 튕겨 False."""
+        return frame is not None and ORDER_FRAME_MARK in (frame.url or "")
+
+    def _open_order_form(self, page):
+        """주문폼을 열어 채울 프레임을 반환한다. 세션 만료(order3가 login.asp로 리다이렉트
+        되거나 프레임셋 자체가 없음)면 재로그인 후 1회 재시도한다(자가복구). 재로그인/재접근
+        실패면 RuntimeError.
+
+        세션 만료 시 order3.asp 요청이 member/login.asp 로 튕기고 그 페이지엔 submit_reg 가
+        없어 조용히 등록 누락되던 문제(라이브 2026-07-06)를 이 지점에서 차단한다.
+        """
+        frame = self._goto_order(page)
+        if self._on_order_form(frame):
+            return frame
+        logger.info("FlowerNT3 주문폼 미로드(세션 만료 추정) — 재로그인 후 재시도")
+        if not self._try_login(page):
+            raise RuntimeError("FlowerNT3 세션 만료 — 재로그인 실패(입력 불가)")
+        frame = self._goto_order(page)
+        if not self._on_order_form(frame):
+            raise RuntimeError("FlowerNT3 재로그인 후에도 주문폼 미로드(세션/폼 확인 필요)")
+        return frame
+
     def _active_page(self, ctx):
         """작업할 정상 페이지를 고른다. flowernt 페이지를 우선하고, 빈/detached
         페이지(진단·세션꼬임으로 남은 about:blank 등)는 피한다. 정상 페이지가
@@ -306,18 +346,9 @@ class FlowerNt3Automator:
                 # 주문폼은 반드시 프레임셋 콘텐츠 프레임(flowernt3Main) 안에서 연다.
                 # 최상위 page를 order3.asp로 직접 이동하면 프레임셋이 깨져 제출 대상
                 # (inputform) 프레임이 사라지고, submit_reg는 돌지만 등록이 누락된다.
-                order_url = self._order_url()
-                content = self._content_frame(page)
-                if content is None:
-                    page.goto(self._main_url(), wait_until="domcontentloaded")
-                    page.wait_for_timeout(1000)
-                    content = self._content_frame(page)
-                if content is None:
-                    raise RuntimeError(
-                        "FlowerNT3 콘텐츠 프레임(flowernt3Main) 없음 — 입력 불가"
-                    )
-                content.goto(order_url, wait_until="domcontentloaded")
-                frame = self._content_frame(page) or page.main_frame
+                # 세션 만료로 order3가 login.asp로 튕기면 _open_order_form이 재로그인 후
+                # 재시도한다(실패 시 예외 → 호출자가 백업+fail로 처리).
+                frame = self._open_order_form(page)
                 fill_order_form(frame, order, auto_submit=self.auto_submit)
                 # 등록 POST가 끝날 때까지 대기(close로 in-flight 취소 방지). 타임아웃은 무시.
                 try:

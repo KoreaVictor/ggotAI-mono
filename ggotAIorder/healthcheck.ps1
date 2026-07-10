@@ -1,4 +1,4 @@
-# healthcheck.ps1
+﻿# healthcheck.ps1
 # ggotAIorder 수집엔진/RPA 크롬 자동 점검·복구 스크립트.
 # - 백엔드(127.0.0.1:8765)가 죽어 있으면 pythonw run_dev.py 로 재기동.
 # - RPA 전용 Chrome(127.0.0.1:9222)은 launch_rpa_chrome.ps1(멱등)로 점검·기동.
@@ -7,9 +7,11 @@
 # 출력 메시지는 인코딩 문제 회피를 위해 영문으로 둔다.
 $ErrorActionPreference = "Stop"
 
-$pythonw      = "C:\Program Files\Python313\pythonw.exe"
-$backend      = "C:\ggotAI\ggotAIorder\backend\run_dev.py"
-$chromeScript = "C:\ggotAI\ggotAIorder\launch_rpa_chrome.ps1"
+. (Join-Path $PSScriptRoot 'common_paths.ps1')
+
+$pythonw      = Resolve-Pythonw
+$backend      = Join-Path $PSScriptRoot 'backend\run_dev.py'
+$chromeScript = Join-Path $PSScriptRoot 'launch_rpa_chrome.ps1'
 $backendPort  = 8765
 
 function Test-PortAlive([int]$port) {
@@ -21,7 +23,7 @@ function Test-PortAlive([int]$port) {
 if (Test-PortAlive $backendPort) {
     Write-Host ("OK: backend already listening on 127.0.0.1:{0}." -f $backendPort) -ForegroundColor Yellow
 } else {
-    if (-not (Test-Path $pythonw)) { Write-Host ("FAILED: pythonw not found: {0}" -f $pythonw) -ForegroundColor Red; exit 1 }
+    if (-not $pythonw)             { Write-Host "FAILED: pythonw.exe not found (py launcher / PATH / standard install dirs)." -ForegroundColor Red; exit 1 }
     if (-not (Test-Path $backend)) { Write-Host ("FAILED: run_dev.py not found: {0}" -f $backend) -ForegroundColor Red; exit 1 }
     Start-Process -FilePath $pythonw -ArgumentList $backend -WindowStyle Hidden | Out-Null
     Write-Host ("RESTARTED: backend (pythonw run_dev.py) on port {0}." -f $backendPort) -ForegroundColor Green

@@ -1,4 +1,4 @@
-# launch_rpa_chrome.ps1
+﻿# launch_rpa_chrome.ps1
 # RPA 전용 Chrome 기동 스크립트 (CDP 디버그 포트 + 전용 프로필).
 # - FlowerNt3Automator 가 http://127.0.0.1:9222 (CDP) 로 붙어서 주문폼을 조작합니다.
 # - 전용 user-data-dir 에 로그인 세션이 유지되므로, 최초 1회만 수동 로그인하면 됩니다.
@@ -6,17 +6,16 @@
 # 출력 메시지는 인코딩 문제 회피를 위해 영문으로 둡니다.
 $ErrorActionPreference = "Stop"
 
-$chrome      = "C:\Program Files\Google\Chrome\Application\chrome.exe"
-$profileDir  = "C:\ggotAI\rpa_profile"
+. (Join-Path $PSScriptRoot 'common_paths.ps1')
+
+$chrome      = Resolve-Chrome
+$profileDir  = Join-Path (Get-GgotRoot) 'rpa_profile'
 $debugPort   = 9222
 # 사전기동 시 열 랜딩 URL(FlowerNT3). 실제 주문 시엔 백엔드가 DB의 rpa_program_url로 구동한다.
 $landingUrl  = "https://www.flowernt.com/main.asp?checkintro=Y"
 
 try {
-    if (-not (Test-Path $chrome)) {
-        $alt = "C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"
-        if (Test-Path $alt) { $chrome = $alt } else { throw "chrome.exe not found: $chrome" }
-    }
+    if (-not $chrome) { throw "chrome.exe not found (App Paths / Program Files / LocalAppData)." }
     if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir | Out-Null }
 
     # Already up? CDP endpoint responds on 127.0.0.1 (localhost->::1 is refused).
@@ -32,14 +31,14 @@ try {
         exit 0
     }
 
-    $args = @(
+    $chromeArgs = @(
         ("--remote-debugging-port={0}" -f $debugPort),
-        ("--user-data-dir={0}" -f $profileDir),
+        ('--user-data-dir="{0}"' -f $profileDir),
         "--no-first-run",
         "--no-default-browser-check",
         $landingUrl
     )
-    Start-Process -FilePath $chrome -ArgumentList $args | Out-Null
+    Start-Process -FilePath $chrome -ArgumentList $chromeArgs | Out-Null
 
     Write-Host ""
     Write-Host "==================================================" -ForegroundColor Green

@@ -66,6 +66,47 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content" />
         </LinearLayout>
+
+        <!-- 카톡 주문 수집: 알림 접근이 꺼져 있으면 카톡 주문을 통째로 놓치므로 상태를 눈에 보이게 한다. -->
+        <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:background="#FFFFFF"
+            android:padding="16dp"
+            android:layout_marginTop="12dp"
+            android:gravity="center_vertical"
+            android:elevation="2dp">
+
+            <LinearLayout
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:orientation="vertical">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="카톡 주문 수집"
+                    android:textSize="16sp"
+                    android:textColor="#212121" />
+
+                <TextView
+                    android:id="@+id/textKakaoStatus"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="상태 확인 중"
+                    android:textSize="12sp"
+                    android:textColor="#757575"
+                    android:layout_marginTop="4dp" />
+            </LinearLayout>
+
+            <Button
+                android:id="@+id/buttonKakaoAccess"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="권한 설정" />
+        </LinearLayout>
     </LinearLayout>
 
 </androidx.constraintlayout.widget.ConstraintLayout>

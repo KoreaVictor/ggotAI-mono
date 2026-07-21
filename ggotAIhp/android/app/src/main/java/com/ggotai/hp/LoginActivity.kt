@@ -73,7 +73,9 @@ class LoginActivity : AppCompatActivity() {
             Manifest.permission.READ_PHONE_STATE,
             Manifest.permission.READ_CALL_LOG,
             Manifest.permission.READ_EXTERNAL_STORAGE,
-            Manifest.permission.READ_CONTACTS
+            Manifest.permission.READ_CONTACTS,
+            // 문자 주문 수집 — 없으면 SmsReceiver 가 아예 호출되지 않는다.
+            Manifest.permission.RECEIVE_SMS
         )
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)

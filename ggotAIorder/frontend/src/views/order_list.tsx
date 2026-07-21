@@ -2,7 +2,8 @@ import type React from 'react';
 import { useState, useEffect } from 'react';
 import { supabase } from '../supabase';
 import { useSession } from '../session/SessionContext';
-import { getOrders, requeueOrder, type OrderRow } from '../orders/client';
+import { completeHoldOrder, getOrders, requeueOrder, type HoldPatch, type OrderRow } from '../orders/client';
+import { isUnknownDeliveryAt, toDateTimeLocal, toKstIso } from '../orders/holdForm';
 import type { DashRpc } from '../dashboard/client';
 import { channelLabel } from '../dashboard/currentTask';
 import {
@@ -30,7 +31,14 @@ const CHANNEL_SEGMENTS: { label: string; value: string | null }[] = [
   { label: '쇼핑몰', value: '쇼핑몰' },
   { label: '인터라넷', value: '인터라넷' },
   { label: '매장판매', value: '가게음성' },
+  { label: '카톡', value: '카톡' },
+  { label: '문자', value: '문자' },
 ];
+
+// '미정'은 추출 실패 시 채워지는 안전 기본값 — 보완 화면에서는 빈칸으로 취급한다.
+function editableValue(raw: string | null | undefined): string {
+  return !raw || raw === '미정' ? '' : raw;
+}
 
 // 오늘(KST) 'YYYY-MM-DD'
 function todayKst(): string {
@@ -114,10 +122,57 @@ export function OrderListView() {
   const totalCount = filteredOrders.length;
   const totalAmount = filteredOrders.reduce((sum, o) => sum + (o.price ?? 0), 0);
 
+  // 보류(hold) 주문 보완 입력값. 빈 문자열은 '안 채움'으로 보고 서버에 보내지 않는다.
+  const [holdDraft, setHoldDraft] = useState<Record<string, string>>({});
+  const [saving, setSaving] = useState(false);
+
   const handleViewDetail = (order: OrderRow) => {
     setSelectedOrder(order);
     setModalSuccess('');
     setModalError('');
+    // 이미 값이 있는 칸은 그대로 보여주고, 미상('미정'·2099 센티넬)은 빈칸으로 연다.
+    setHoldDraft(order.rpa_status !== 'hold' ? {} : {
+      product_name: editableValue(order.product_name),
+      price: order.price ? String(order.price) : '',
+      delivery_at: isUnknownDeliveryAt(order.delivery_at)
+        ? '' : toDateTimeLocal(order.delivery_at),
+      delivery_place: editableValue(order.delivery_place),
+      receiver_name: editableValue(order.receiver_name),
+      receiver_phone_number: editableValue(order.receiver_phone_number),
+    });
+  };
+
+  const handleCompleteHold = async (orderId: number) => {
+    setModalSuccess('');
+    setModalError('');
+    setSaving(true);
+
+    const patch: HoldPatch = {};
+    if (holdDraft.product_name?.trim()) patch.product_name = holdDraft.product_name.trim();
+    if (holdDraft.price?.trim()) patch.price = Number(holdDraft.price);
+    if (holdDraft.delivery_at) patch.delivery_at = toKstIso(holdDraft.delivery_at);
+    if (holdDraft.delivery_place?.trim()) patch.delivery_place = holdDraft.delivery_place.trim();
+    if (holdDraft.receiver_name?.trim()) patch.receiver_name = holdDraft.receiver_name.trim();
+    if (holdDraft.receiver_phone_number?.trim()) {
+      patch.receiver_phone_number = holdDraft.receiver_phone_number.trim();
+    }
+
+    const r = await completeHoldOrder(rpc, shopKey, readToken ?? '', orderId, patch);
+    setSaving(false);
+
+    if (!r.ok) {
+      setModalError(
+        r.reason === 'unauthorized' ? '세션이 만료되었습니다. 다시 로그인해주세요.'
+          : r.reason === 'not_found' ? '해당 주문을 찾을 수 없습니다.'
+          : r.reason === 'still_incomplete' ? '아직 비어 있는 필수 항목이 있습니다. 상품·가격·배송일시·배달장소·받는분을 모두 채워주세요.'
+          : '저장 중 오류가 발생했습니다.',
+      );
+      return;
+    }
+
+    setModalSuccess('보완 내용을 저장했습니다. RPA 대기열로 넘겼습니다.');
+    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, rpa_status: 'ready' } : o)));
+    setSelectedOrder((prev) => (prev ? { ...prev, rpa_status: 'ready' } : prev));
   };
 
   const handleRequeue = async (orderId: number) => {
@@ -136,8 +191,14 @@ export function OrderListView() {
     }
   };
 
-  const renderStatusBadge = (status: 'ready' | 'success' | 'manual' | 'fail') => {
+  const renderStatusBadge = (status: 'ready' | 'success' | 'manual' | 'fail' | 'hold') => {
     switch (status) {
+      case 'hold':
+        return (
+          <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-warning/15 text-brand-warning border border-brand-warning/30">
+            <AlertCircle className="h-3 w-3" />확인필요
+          </span>
+        );
       case 'success':
         return (
           <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full text-xs font-semibold bg-brand-success/15 text-brand-success border border-brand-success/30">
@@ -211,7 +272,7 @@ export function OrderListView() {
 
           {/* 상태 탭 */}
           <div className="flex bg-brand-card p-1 border border-brand-border rounded-lg lg:ml-2">
-            {([['all', '전체'], ['ready', '대기'], ['success', '성공'], ['fail', '실패']] as const).map(([val, label]) => (
+            {([['all', '전체'], ['hold', '확인필요'], ['ready', '대기'], ['success', '성공'], ['fail', '실패']] as const).map(([val, label]) => (
               <button key={val} onClick={() => setStatusFilter(val)}
                 className={`px-3 py-1.5 text-xs font-semibold rounded-md transition ${statusFilter === val ? 'bg-brand-primary text-white shadow-md' : 'text-brand-text-secondary hover:text-brand-text-primary'}`}>
                 {label}
@@ -331,6 +392,41 @@ export function OrderListView() {
                 </div>
               )}
 
+              {/* 보류 건: 손님이 안 적은 칸을 사장님이 채워야 자동입력으로 넘어간다. */}
+              {selectedOrder.rpa_status === 'hold' && (
+                <div className="space-y-4 bg-brand-warning/10 p-5 border border-brand-warning/30 rounded-xl">
+                  <h4 className="text-xs font-bold text-brand-warning uppercase tracking-wider border-b border-brand-warning/30 pb-2 flex items-center gap-1.5">
+                    <AlertCircle className="h-4 w-4" /> 내용 보완 — 빈칸을 채우면 전산에 자동입력됩니다
+                  </h4>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {([
+                      ['product_name', '상품명', 'text', '예: 근조화환'],
+                      ['price', '가격(원)', 'number', '예: 100000'],
+                      ['delivery_at', '배송 일시', 'datetime-local', ''],
+                      ['delivery_place', '배달 장소', 'text', '예: 서울 강남구 논현로 1'],
+                      ['receiver_name', '받는 분', 'text', '예: 김철수'],
+                      ['receiver_phone_number', '받는 분 연락처', 'text', '예: 010-1234-5678'],
+                    ] as const).map(([field, label, type, placeholder]) => (
+                      <label key={field} className="block">
+                        <span className="block text-[10px] text-brand-text-muted font-bold uppercase mb-1">{label}</span>
+                        <input
+                          type={type}
+                          value={holdDraft[field] ?? ''}
+                          placeholder={placeholder}
+                          onChange={(e) => setHoldDraft((prev) => ({ ...prev, [field]: e.target.value }))}
+                          className="w-full px-3 py-2 bg-brand-card border border-brand-border rounded-lg text-sm text-brand-text-primary focus:outline-none focus:border-brand-primary"
+                        />
+                      </label>
+                    ))}
+                  </div>
+                  {selectedOrder.delivery_at_text && (
+                    <div className="text-xs text-brand-text-muted">
+                      손님이 말한 배송 시점: <span className="font-semibold text-brand-text-secondary">{selectedOrder.delivery_at_text}</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4 bg-brand-bg/30 p-5 border border-brand-border/50 rounded-xl">
                   <h4 className="text-xs font-bold text-brand-primary uppercase tracking-wider border-b border-brand-border/40 pb-2 flex items-center gap-1.5">
@@ -407,6 +503,12 @@ export function OrderListView() {
             {/* 모달 푸터: fail/manual(백업) 시 재전송 */}
             <div className="px-6 py-4 border-t border-brand-border/80 flex justify-between items-center bg-brand-card">
               <div>
+                {selectedOrder.rpa_status === 'hold' && (
+                  <button onClick={() => handleCompleteHold(selectedOrder.id)} disabled={saving}
+                    className="flex items-center gap-1.5 px-4 py-2 bg-brand-primary text-brand-bg hover:bg-brand-primary/90 disabled:opacity-50 text-xs font-semibold rounded-lg transition">
+                    <CheckCircle2 className="h-3.5 w-3.5" /><span>{saving ? '저장 중…' : '보완 저장하고 자동입력'}</span>
+                  </button>
+                )}
                 {(selectedOrder.rpa_status === 'fail' || selectedOrder.rpa_status === 'manual') && (
                   <button onClick={() => handleRequeue(selectedOrder.id)}
                     className="flex items-center gap-1.5 px-4 py-2 bg-brand-warning text-brand-bg hover:bg-brand-warning/90 text-xs font-semibold rounded-lg transition">

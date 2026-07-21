@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { getOrders, requeueOrder } from './client';
+import { completeHoldOrder, getOrders, requeueOrder } from './client';
 import type { DashRpc } from '../dashboard/client';
 
 function fakeRpc(data: unknown, error: unknown = null): DashRpc {
@@ -53,6 +53,49 @@ describe('requeueOrder', () => {
   });
   it('RPC 에러면 error', async () => {
     const r = await requeueOrder(fakeRpc(null, { message: 'boom' }), 7, 'tk', 1);
+    expect(r).toEqual({ ok: false, reason: 'error' });
+  });
+});
+
+describe('completeHoldOrder', () => {
+  function spyRpc(data: unknown) {
+    const calls: { fn: string; args: Record<string, unknown> }[] = [];
+    const rpc = (async (fn: string, args: Record<string, unknown>) => {
+      calls.push({ fn, args });
+      return { data, error: null };
+    }) as DashRpc;
+    return { rpc, calls };
+  }
+
+  it('보완한 필드만 인자로 보낸다', async () => {
+    // null 인자는 서버에서 '변경 없음'으로 처리되므로 안 채운 칸을 덮어쓰지 않는다.
+    const { rpc, calls } = spyRpc({ ok: true, rpa_status: 'ready' });
+
+    const r = await completeHoldOrder(rpc, 7, 'tk', 42, {
+      delivery_place: '서울 강남구 논현로 1',
+      receiver_name: '김철수',
+    });
+
+    expect(r).toEqual({ ok: true, rpa_status: 'ready' });
+    expect(calls[0].fn).toBe('complete_hold_order');
+    expect(calls[0].args.p_order_id).toBe(42);
+    expect(calls[0].args.p_delivery_place).toBe('서울 강남구 논현로 1');
+    expect(calls[0].args.p_receiver_name).toBe('김철수');
+    expect(calls[0].args.p_product_name).toBeNull();
+    expect(calls[0].args.p_price).toBeNull();
+  });
+
+  it('아직 필수값이 비면 still_incomplete 를 그대로 전달한다', async () => {
+    const { rpc } = spyRpc({ ok: false, reason: 'still_incomplete', rpa_status: 'hold' });
+
+    const r = await completeHoldOrder(rpc, 7, 'tk', 42, { receiver_name: '김철수' });
+
+    expect(r).toEqual({ ok: false, reason: 'still_incomplete' });
+  });
+
+  it('rpc 오류면 error', async () => {
+    const rpc = (async () => ({ data: null, error: { message: 'boom' } })) as DashRpc;
+    const r = await completeHoldOrder(rpc, 7, 'tk', 42, { receiver_name: '김' });
     expect(r).toEqual({ ok: false, reason: 'error' });
   });
 });

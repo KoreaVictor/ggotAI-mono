@@ -1,7 +1,8 @@
 // supabase.rpc 와 호환되는 최소 계약(테스트 주입용)
 export type DashRpc = (fn: string, args: Record<string, unknown>) => Promise<{ data: unknown; error: unknown }>;
 
-export interface Stats { today_total: number; rpa_success: number; rpa_fail: number; rpa_ready: number; }
+// rpa_hold = 필수값 누락으로 보류된 주문(사장님 보완 대기). 오늘 경계와 무관한 누적치다.
+export interface Stats { today_total: number; rpa_success: number; rpa_fail: number; rpa_ready: number; rpa_hold: number; }
 export interface ChannelAgg { channel_order: string; total: number; success: number; }
 export interface Config { garjeon: boolean; hp1: boolean; hp2: boolean; voice: boolean; mall: boolean; intranet: boolean; }
 export interface FeedRow {
@@ -17,5 +18,7 @@ export async function getDashboard(
   if (error) return { ok: false, reason: 'error' };
   const d = data as (DashboardData & { ok?: boolean; reason?: string; engine_alive?: boolean }) | null;
   if (!d || !d.ok) return { ok: false, reason: d?.reason ?? 'error' };
-  return { ok: true, data: { stats: d.stats, channels: d.channels, config: d.config, feed: d.feed, engineAlive: !!d.engine_alive } };
+  // rpa_hold 는 나중에 추가된 필드 — 구버전 서버 응답이 섞여도 화면이 NaN 을 그리지 않게 보정.
+  const stats = { ...d.stats, rpa_hold: d.stats?.rpa_hold ?? 0 };
+  return { ok: true, data: { stats, channels: d.channels, config: d.config, feed: d.feed, engineAlive: !!d.engine_alive } };
 }

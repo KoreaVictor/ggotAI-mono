@@ -261,6 +261,124 @@ async def test_increment_attempts_called_before_work(monkeypatch):
     assert kinds.index("increment_attempts") < kinds.index("get")
 
 
+def _text_order_extraction() -> OrderExtraction:
+    """카톡·문자 주문 중 RPA 등록 필수값이 모두 채워진 경우."""
+    return OrderExtraction(
+        product_name="근조화환", quantity=1, price=100000,
+        delivery_at="2026-07-22T15:00:00+09:00",
+        delivery_place="서울 강남구 논현로 1", receiver_name="김철수",
+    )
+
+
+def test_text_channels_are_processed_by_realtime():
+    """카톡·문자도 Realtime·catch-up 처리 대상이어야 한다."""
+    assert {"카톡", "문자"} <= engine.REALTIME_CHANNELS
+
+
+async def test_text_channel_missing_required_holds_and_skips_rpa(monkeypatch):
+    """카톡 주문에 필수값이 비면 rpa_status='hold'로 두고 RPA를 돌리지 않는다.
+
+    누락된 채로 자동입력하면 FlowerNT 등록이 깨지거나 잘못된 주문이 들어가므로,
+    사장님이 ggotAIya에서 채운 뒤 등록하게 한다.
+    """
+    repo = FakeRepo(_row(channel_order="카톡", audio_file_name=None))
+    partial = OrderExtraction(product_name="근조화환", price=100000)  # 배송정보 없음
+    monkeypatch.setattr(engine, "extract_order", lambda t: partial)
+    enqueued: list[int] = []
+
+    async def fake_enqueue(order_id: int) -> None:
+        enqueued.append(order_id)
+
+    async def fake_notify(shop_key, channel, count, outcome):
+        return True
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+    monkeypatch.setattr(engine, "notify_send", fake_notify)
+
+    await engine.process(1, repo=repo)
+
+    payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    assert payload["rpa_status"] == "hold"
+    assert enqueued == []
+    # 주문 행은 만들어졌으므로 수집 이력은 정상 종결돼야 한다(재처리 방지).
+    assert ("mark_processed", 1, "Y") in repo.calls
+
+
+async def test_hold_notifies_owner(monkeypatch):
+    """보류만 하고 알리지 않으면 사장님이 주문이 온 줄 모른다 — 'hold' 알림을 보낸다."""
+    repo = FakeRepo(_row(channel_order="문자", audio_file_name=None))
+    monkeypatch.setattr(
+        engine, "extract_order", lambda t: OrderExtraction(product_name="장미", price=50000)
+    )
+    sent: list[tuple] = []
+
+    async def fake_notify(shop_key, channel, count, outcome):
+        sent.append((shop_key, channel, count, outcome))
+        return True
+
+    monkeypatch.setattr(engine, "notify_send", fake_notify)
+    monkeypatch.setattr(engine, "enqueue", lambda order_id: None)
+
+    await engine.process(1, repo=repo)
+
+    assert sent == [(2, "문자", 1, "hold")]
+
+
+async def test_hold_notification_failure_does_not_break_pipeline(monkeypatch):
+    """알림이 죽어도 주문 행은 이미 저장됐으므로 처리 흐름은 정상 종료돼야 한다."""
+    repo = FakeRepo(_row(channel_order="문자", audio_file_name=None))
+    monkeypatch.setattr(
+        engine, "extract_order", lambda t: OrderExtraction(product_name="장미", price=50000)
+    )
+
+    async def boom(shop_key, channel, count, outcome):
+        raise RuntimeError("notifier down")
+
+    monkeypatch.setattr(engine, "notify_send", boom)
+    monkeypatch.setattr(engine, "enqueue", lambda order_id: None)
+
+    await engine.process(1, repo=repo)
+
+    assert ("mark_processed", 1, "Y") in repo.calls
+
+
+async def test_text_channel_complete_order_goes_to_rpa(monkeypatch):
+    """카톡 주문이라도 필수값이 다 있으면 기존 경로대로 자동입력한다."""
+    repo = FakeRepo(_row(channel_order="문자", audio_file_name=None))
+    monkeypatch.setattr(engine, "extract_order", lambda t: _text_order_extraction())
+    enqueued: list[int] = []
+
+    async def fake_enqueue(order_id: int) -> None:
+        enqueued.append(order_id)
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    assert payload["rpa_status"] == "ready"
+    assert enqueued == [999]
+
+
+async def test_voice_channel_missing_required_still_goes_to_rpa(monkeypatch):
+    """보류 게이트는 텍스트 채널 전용 — 통화 주문 경로는 무영향이어야 한다."""
+    repo = FakeRepo(_row(channel_order="핸드폰"))
+    partial = OrderExtraction(product_name="장미", price=50000)  # 배송정보 없음
+    monkeypatch.setattr(engine, "extract_order", lambda t: partial)
+    enqueued: list[int] = []
+
+    async def fake_enqueue(order_id: int) -> None:
+        enqueued.append(order_id)
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+
+    await engine.process(1, repo=repo)
+
+    payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    assert payload["rpa_status"] == "ready"
+    assert enqueued == [999]
+
+
 async def test_in_flight_guard_dedups_concurrent(monkeypatch):
     """같은 id로 동시 process()가 들어와도 한 번만 처리(Realtime↔스캔 중복 방지)."""
     repo = FakeRepo(_row())
@@ -279,3 +397,60 @@ async def test_in_flight_guard_dedups_concurrent(monkeypatch):
     assert len(increments) == 1
     gets = [c for c in repo.calls if c[0] == "get"]
     assert len(gets) == 1
+
+async def test_text_channel_without_price_is_still_an_order(monkeypatch):
+    """카톡·문자는 가격을 안 적는 게 정상 — 상품명만 있어도 주문으로 받아 보류한다.
+
+    실기기에서 확인된 유실: "사장님 근조화환 하나 부탁드려요"가 가격이 없다는 이유로
+    is_order='N' 으로 폐기돼, 사장님이 주문이 온 줄도 몰랐다.
+    """
+    repo = FakeRepo(_row(channel_order="카톡", audio_file_name=None))
+    no_price = OrderExtraction(product_name="근조화환")
+    monkeypatch.setattr(engine, "extract_order", lambda t: no_price)
+    enqueued: list[int] = []
+
+    async def fake_enqueue(order_id: int) -> None:
+        enqueued.append(order_id)
+
+    async def fake_notify(shop_key, channel, count, outcome):
+        return True
+
+    monkeypatch.setattr(engine, "enqueue", fake_enqueue)
+    monkeypatch.setattr(engine, "notify_send", fake_notify)
+
+    await engine.process(1, repo=repo)
+
+    kinds = [c[0] for c in repo.calls]
+    assert "insert" in kinds, "가격이 없다는 이유로 주문이 폐기됐다"
+    payload = next(c[1] for c in repo.calls if c[0] == "insert")
+    assert payload["rpa_status"] == "hold"
+    assert ("mark_processed", 1, "Y") in repo.calls
+    assert enqueued == []
+
+
+async def test_voice_channel_without_price_is_not_an_order(monkeypatch):
+    """통화는 기존 규칙 유지 — 가격 없이는 주문으로 보지 않는다(잡담·광고 방어선)."""
+    repo = FakeRepo(_row(channel_order="핸드폰"))
+    no_price = OrderExtraction(product_name="장미")
+    monkeypatch.setattr(engine, "extract_order", lambda t: no_price)
+    monkeypatch.setattr(engine, "enqueue", lambda order_id: None)
+
+    await engine.process(1, repo=repo)
+
+    kinds = [c[0] for c in repo.calls]
+    assert ("mark_processed", 1, "N") in repo.calls
+    assert "insert" not in kinds
+
+
+async def test_text_channel_without_product_is_not_an_order(monkeypatch):
+    """상품명조차 없으면 텍스트 채널에서도 주문이 아니다(잡담이 새어들지 않게)."""
+    repo = FakeRepo(_row(channel_order="문자", audio_file_name=None))
+    monkeypatch.setattr(engine, "extract_order", lambda t: OrderExtraction(price=50000))
+    monkeypatch.setattr(engine, "enqueue", lambda order_id: None)
+
+    await engine.process(1, repo=repo)
+
+    kinds = [c[0] for c in repo.calls]
+    assert ("mark_processed", 1, "N") in repo.calls
+    assert "insert" not in kinds
+

@@ -11,6 +11,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
+from ggotaiorder.notifier.sms_sender import send as notify_send
 from ggotaiorder.pipeline.extractor import extract_order
 from ggotaiorder.pipeline.models import OrderExtraction
 from ggotaiorder.pipeline.order_payload import (
@@ -19,6 +20,7 @@ from ggotaiorder.pipeline.order_payload import (
     resolve_delivery_at,
 )
 from ggotaiorder.pipeline.repository import OrderRepository, SupabaseOrderRepository
+from ggotaiorder.pipeline.required_fields import missing_required
 from ggotaiorder.pipeline.stt import transcribe
 from ggotaiorder.rpa.singleton_macro import enqueue
 from ggotaiorder.scraper.crawler import INTRANET_AUDIO_MARKER
@@ -33,7 +35,11 @@ ORDER_FIELDS = (
 )
 
 # Realtime이 직접 처리하는 채널 (catch-up 스캔도 같은 집합을 사용 — 단일 출처).
-REALTIME_CHANNELS = {"핸드폰", "가게음성"}
+REALTIME_CHANNELS = {"핸드폰", "가게음성", "카톡", "문자"}
+
+# 텍스트로 들어오는 채널. 손님이 안 적으면 필드가 빈 채로 오므로 보류 게이트를 적용한다
+# (통화는 사장님이 그 자리에서 되물어 채우므로 대상 아님).
+TEXT_CHANNELS = {"카톡", "문자"}
 
 # 영구 실패 행의 무한 재시도 차단 상한 (catch-up 스캔과 공유)
 MAX_ATTEMPTS = 5
@@ -56,17 +62,24 @@ def count_missing(extraction: OrderExtraction) -> int:
     return missing
 
 
-def is_order(extraction: OrderExtraction) -> bool:
-    """주문 판정: 상품명과 가격이 모두 있으면 주문으로 본다.
+def is_order(extraction: OrderExtraction, channel_order: str = "") -> bool:
+    """주문 판정.
 
-    배달 주문뿐 아니라 매장판매(배달장소·수령인·리본·카드가 없는 즉석 판매)도
-    상품명+가격만 있으면 주문 경로로 처리한다. 광고·시세·잡담은 추출기가
-    product_name/price 를 null 로 비우는 것을 1차 방어선으로 삼는다(extractor 규칙).
+    음성 채널은 상품명+가격을 모두 요구한다. 통화 중엔 사장님이 가격을 말하므로
+    가격이 비었다면 주문이 아닐 가능성이 높고, 이 조건이 광고·시세·잡담의 방어선이 된다.
+
+    텍스트 채널(카톡·문자)은 상품명만 있으면 주문으로 본다. 손님이 가격을 안 적는 것이
+    정상이고(가격은 사장님이 알려준다), 가격을 요구하면 실제 주문이 조용히 폐기된다
+    — 실기기에서 "사장님 근조화환 하나 부탁드려요"가 유실된 것이 그 사례다.
+    대신 필수값이 비므로 보류(hold)로 잡혀 사장님 확인을 거친다.
     """
     name = extraction.product_name
     has_product = isinstance(name, str) and name.strip() != ""
-    has_price = extraction.price is not None
-    return has_product and has_price
+    if not has_product:
+        return False
+    if channel_order in TEXT_CHANNELS:
+        return True
+    return extraction.price is not None
 
 
 # 하위호환 별칭(기존 호출부·테스트가 engine._build_order_payload 등을 참조).
@@ -126,7 +139,7 @@ async def _process_inner(call_history_id: int, repo: OrderRepository) -> None:
         logger.exception("Gemini 추출 실패 id=%s", call_history_id)
         return
 
-    if not is_order(extraction):
+    if not is_order(extraction, row.channel_order):
         await asyncio.to_thread(repo.mark_processed, call_history_id, "N")
         await asyncio.to_thread(repo.delete_audio, row.audio_file_name)
         logger.info(
@@ -135,10 +148,14 @@ async def _process_inner(call_history_id: int, repo: OrderRepository) -> None:
         )
         return
 
+    # 텍스트 채널은 RPA 필수값이 비면 자동입력하지 않고 보류한다(사장님 보완 대기).
+    missing = missing_required(extraction) if row.channel_order in TEXT_CHANNELS else []
+    rpa_status = "hold" if missing else "ready"
+
     # order_details INSERT가 성공한 뒤에만 종결('Y')로 마킹한다(부분쓰기 방지).
     try:
         order_id = await asyncio.to_thread(
-            repo.insert_order_details, _build_order_payload(row, extraction)
+            repo.insert_order_details, _build_order_payload(row, extraction, rpa_status)
         )
     except Exception:
         logger.exception("order_details 생성 실패 — 미종결 id=%s", call_history_id)
@@ -146,4 +163,18 @@ async def _process_inner(call_history_id: int, repo: OrderRepository) -> None:
 
     await asyncio.to_thread(repo.mark_processed, call_history_id, "Y")
     logger.info("order_details 생성 id=%s order_id=%s", call_history_id, order_id)
+
+    if missing:
+        logger.info(
+            "필수값 누락 — 보류(자동입력 안 함) order_id=%s 누락=%s", order_id, missing
+        )
+        # 알리지 않으면 사장님이 주문이 온 줄 모른다. 주문 행은 이미 저장됐으므로
+        # 알림 실패가 파이프라인을 되돌리게 두지 않는다.
+        try:
+            await notify_send(
+                row.shop_key, channel=row.channel_order, count=1, outcome="hold"
+            )
+        except Exception:
+            logger.exception("보류 알림 발송 실패 order_id=%s", order_id)
+        return
     await enqueue(order_id)

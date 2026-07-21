@@ -32,14 +32,18 @@ def _mask(phone: str) -> str:
 _OUTCOME_SUCCESS = "success"
 _OUTCOME_MANUAL = "manual"
 _OUTCOME_FAIL = "fail"
+_OUTCOME_HOLD = "hold"
 
 
 def _template_for(settings: "object", outcome: str) -> str:
-    """outcome(success/manual/fail)에 해당하는 알림 문구를 고른다."""
+    """outcome(success/manual/fail/hold)에 해당하는 알림 문구를 고른다."""
     if outcome == _OUTCOME_SUCCESS:
         return settings.rpa_success_message
     if outcome == _OUTCOME_MANUAL:
         return settings.rpa_manual_message
+    if outcome == _OUTCOME_HOLD:
+        # 보류는 오류가 아니라 '확인 필요' 안내 — 실패 경고로 폴백되면 안 된다.
+        return settings.rpa_hold_message
     return settings.rpa_fail_message
 
 
@@ -50,6 +54,7 @@ _TEMPLATE_CODE_ENV = {
     _OUTCOME_SUCCESS: ("NOTIFY_TEMPLATE_CODE_SUCCESS", "IWINV_TEMPLATE_CODE_SUCCESS"),
     _OUTCOME_MANUAL: ("NOTIFY_TEMPLATE_CODE_MANUAL", "IWINV_TEMPLATE_CODE_MANUAL"),
     _OUTCOME_FAIL: ("NOTIFY_TEMPLATE_CODE_FAIL", "IWINV_TEMPLATE_CODE_FAIL"),
+    _OUTCOME_HOLD: ("NOTIFY_TEMPLATE_CODE_HOLD", "IWINV_TEMPLATE_CODE_HOLD"),
 }
 
 

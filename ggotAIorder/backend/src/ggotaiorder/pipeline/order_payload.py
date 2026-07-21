@@ -43,10 +43,13 @@ def resolve_delivery_at(row: CallHistory, extraction: OrderExtraction) -> str:
     return resolved
 
 
-def build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
+def build_order_payload(
+    row: CallHistory, extraction: OrderExtraction, rpa_status: str = "ready"
+) -> dict:
     """추출 결과 + 수집 이력으로 order_details INSERT payload 를 만든다.
 
     NOT NULL·DEFAULT 없는 컬럼은 미상 시 안전 기본값으로 채운다(설계서 §6).
+    rpa_status 는 카톡·문자 보류 건에서 'hold' 로 넘어온다(기본값은 즉시 자동입력).
     """
     return {
         "call_history_id": row.id,
@@ -67,5 +70,5 @@ def build_order_payload(row: CallHistory, extraction: OrderExtraction) -> dict:
         "ribbon_congratulations": extraction.ribbon_congratulations,
         "card_message": extraction.card_message,
         "sang_divi": extraction.sang_divi,
-        "rpa_status": "ready",
+        "rpa_status": rpa_status,
     }

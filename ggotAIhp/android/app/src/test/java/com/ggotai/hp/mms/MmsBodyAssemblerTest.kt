@@ -61,4 +61,34 @@ class MmsBodyAssemblerTest {
     fun `글 앞뒤 공백은 다듬는다`() {
         assertEquals("근조화환 하나", MmsBodyAssembler.assemble(listOf(text("  근조화환 하나  ")), false))
     }
+
+    @Test
+    fun `charset 파라미터가 붙은 text plain 도 글로 읽는다`() {
+        // 아이폰발 MMS 는 흔히 "text/plain; charset=utf-8" 형태로 온다.
+        // 세미콜론 뒤 파라미터 때문에 글이 아니라 사진으로 오분류되면 주문 본문이 사라진다.
+        val part = MmsPart("text/plain; charset=utf-8", "근조화환 하나")
+        assertEquals("근조화환 하나", MmsBodyAssembler.assemble(listOf(part), hasActiveConversation = false))
+    }
+
+    @Test
+    fun `charset 파라미터가 붙은 smil 도 배치 정보로 본다`() {
+        // 파라미터 유무와 무관하게 application/smil 은 내용이 아니다.
+        val part = MmsPart("application/smil; charset=utf-8", "<smil/>")
+        assertNull(MmsBodyAssembler.assemble(listOf(part), hasActiveConversation = true))
+    }
+
+    @Test
+    fun `대문자 TEXT PLAIN 도 글로 읽는다`() {
+        val part = MmsPart("TEXT/PLAIN", "근조화환 하나")
+        assertEquals("근조화환 하나", MmsBodyAssembler.assemble(listOf(part), hasActiveConversation = false))
+    }
+
+    @Test
+    fun `text 가 null 인 파트가 섞여도 유효한 글은 잃지 않는다`() {
+        val nullTextPart = MmsPart("text/plain", null)
+        val body = MmsBodyAssembler.assemble(
+            listOf(nullTextPart, text("근조화환 하나")), hasActiveConversation = false
+        )
+        assertEquals("근조화환 하나", body)
+    }
 }

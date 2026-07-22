@@ -19,20 +19,30 @@ object MmsBodyAssembler {
     private const val LAYOUT_TYPE = "application/smil"
 
     /**
+     * MIME 타입 문자열에서 파라미터(;charset=... 등)를 떼어낸 순수 타입만 남긴다.
+     * 아이폰발 MMS 는 "text/plain; charset=utf-8" 처럼 파라미터를 흔히 붙이는데,
+     * 이를 떼지 않으면 상수와 정확히 일치하지 않아 글이 미디어로 오분류되고
+     * 주문 본문이 통째로 사라진다.
+     */
+    private fun bareContentType(contentType: String): String =
+        contentType.substringBefore(';').trim()
+
+    /**
      * @return 버퍼에 담을 본문. 담을 것이 없으면 null.
      *   파트가 아예 없으면(본문 미다운로드) 역시 null 이다 — 호출부가 이 경우를
      *   워터마크 전진 중단으로 따로 다룬다.
      */
     fun assemble(parts: List<MmsPart>, hasActiveConversation: Boolean): String? {
         val text = parts
-            .filter { it.contentType.equals(TEXT_TYPE, ignoreCase = true) }
+            .filter { bareContentType(it.contentType).equals(TEXT_TYPE, ignoreCase = true) }
             .mapNotNull { it.text?.trim()?.takeIf { line -> line.isNotEmpty() } }
             .joinToString("\n")
         if (text.isNotEmpty()) return text
 
         val hasMedia = parts.any {
-            !it.contentType.equals(TEXT_TYPE, ignoreCase = true) &&
-                !it.contentType.equals(LAYOUT_TYPE, ignoreCase = true)
+            val bare = bareContentType(it.contentType)
+            !bare.equals(TEXT_TYPE, ignoreCase = true) &&
+                !bare.equals(LAYOUT_TYPE, ignoreCase = true)
         }
         return if (hasMedia && hasActiveConversation) PHOTO_PLACEHOLDER else null
     }

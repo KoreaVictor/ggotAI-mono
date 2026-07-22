@@ -1,6 +1,7 @@
 package com.ggotai.hp.worker
 
 import android.content.Context
+import android.util.Log
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingWorkPolicy
 import androidx.work.OneTimeWorkRequestBuilder
@@ -21,10 +22,17 @@ class MmsScanWorker(
 ) : CoroutineWorker(context, params) {
 
     companion object {
+        private const val TAG = "MmsScanWorker"
         private const val WORK_NAME = "mms-scan"
 
         /** 본문 저장을 기다리는 시간. 실측 1.5초에 여유를 뒀다. */
         const val SCAN_DELAY_MILLIS = 5_000L
+
+        /**
+         * 예외로 인한 재시도 상한. SecurityException(권한 미허용) 같은 영구 실패는
+         * 재시도해도 계속 실패하므로, WorkManager 백오프로 무한히 돌지 않게 끊는다.
+         */
+        private const val MAX_EXCEPTION_RETRIES = 5
 
         fun schedule(context: Context, delayMillis: Long = SCAN_DELAY_MILLIS) {
             val request = OneTimeWorkRequestBuilder<MmsScanWorker>()
@@ -40,9 +48,23 @@ class MmsScanWorker(
     }
 
     override suspend fun doWork(): Result {
-        // 본문이 아직 안 내려온 메시지가 남았으면 WorkManager 백오프에 재시도를 맡긴다.
-        // 이게 없으면 그 메시지를 다시 볼 트리거가 "다음 MMS 도착" 또는 "앱 재시작"뿐이라,
-        // 조용한 폰에서는 영영 안 잡힌다. 6시간 상한이 무한 재시도를 자연히 끊는다.
-        return if (MmsScanner.scanOnce(applicationContext)) Result.retry() else Result.success()
+        return try {
+            // 본문이 아직 안 내려온 메시지가 남았으면 WorkManager 백오프에 재시도를 맡긴다.
+            // 이게 없으면 그 메시지를 다시 볼 트리거가 "다음 MMS 도착" 또는 "앱 재시작"뿐이라,
+            // 조용한 폰에서는 영영 안 잡힌다. 6시간 상한이 무한 재시도를 자연히 끊는다.
+            if (MmsScanner.scanOnce(applicationContext)) Result.retry() else Result.success()
+        } catch (e: Exception) {
+            // scanOnce 는 실패(커서·SQLite 오류 등)를 예외로 알린다. 이를 success 로
+            // 삼키면 조용한 폰에서는 다음 MMS 가 올 때까지 재시도가 없어, 그 사이 도착한
+            // 주문이 6시간 창이 지나며 그대로 유실된다. 다만 SecurityException 같은 영구
+            // 실패는 재시도해도 계속 실패하므로 runAttemptCount 로 상한을 둔다.
+            if (runAttemptCount < MAX_EXCEPTION_RETRIES) {
+                Log.w(TAG, "MMS 스캔 실패 — 재시도 예약 (시도 ${runAttemptCount + 1}): ${e.message}")
+                Result.retry()
+            } else {
+                Log.e(TAG, "MMS 스캔 반복 실패 — 재시도 포기 (시도 ${runAttemptCount + 1}): ${e.message}")
+                Result.failure()
+            }
+        }
     }
 }

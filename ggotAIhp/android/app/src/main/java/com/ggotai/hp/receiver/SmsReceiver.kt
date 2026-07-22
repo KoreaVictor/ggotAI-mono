@@ -10,6 +10,8 @@ import com.ggotai.hp.db.MessageBuffer
 import com.ggotai.hp.manager.DeviceStatus
 import com.ggotai.hp.policy.MessageGroupDecider
 import com.ggotai.hp.policy.OrderTextFilter
+import com.ggotai.hp.util.ContactLookup
+import com.ggotai.hp.util.CustomerResolver
 import com.ggotai.hp.worker.MessageFlushWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -62,11 +64,18 @@ class SmsReceiver : BroadcastReceiver() {
                     return@launch
                 }
 
+                // 문자는 발신번호만 온다 — 주소록에 있으면 그 이름을 고객명으로 쓴다.
+                // 없으면 통화와 같은 기본값("신규"). 묶음 키(senderKey)는 번호 그대로 둔다
+                // — 주소록 등록 여부가 바뀌어도 대화방이 갈라지지 않게.
+                val senderName = CustomerResolver.resolveName(
+                    null, ContactLookup.nameFor(context, sender)
+                )
+
                 dao.insert(
                     MessageBuffer(
                         channelOrder = CHANNEL_SMS,
                         senderKey = sender,
-                        senderName = sender,
+                        senderName = senderName,
                         phoneNumber = sender,
                         body = body,
                         receivedAt = received

@@ -12,6 +12,7 @@ import com.ggotai.hp.manager.DeviceStatus
 import com.ggotai.hp.manager.UploadManager
 import com.ggotai.hp.policy.CallSyncDecider
 import com.ggotai.hp.util.CallLogReader
+import com.ggotai.hp.util.ContactLookup
 import com.ggotai.hp.util.CustomerResolver
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -77,7 +78,7 @@ class CallSyncWorker(
             val durationSeconds = if (recordFilePath != null) getAudioDuration(recordFilePath) else 0
             
             val contactName = if (customerNumber != CustomerResolver.UNKNOWN_NUMBER) {
-                getContactName(context, customerNumber)
+                ContactLookup.nameFor(context, customerNumber)
             } else null
             val matchedName = CustomerResolver.resolveName(callLog?.cachedName, contactName)
 
@@ -197,30 +198,6 @@ class CallSyncWorker(
             Log.e(TAG, "미디어 파일 검색 중 에러 발생", e)
         }
         return latestFilePath
-    }
-
-    private fun getContactName(context: Context, phoneNumber: String): String {
-        val uri = android.net.Uri.withAppendedPath(
-            android.provider.ContactsContract.PhoneLookup.CONTENT_FILTER_URI,
-            android.net.Uri.encode(phoneNumber)
-        )
-        val projection = arrayOf(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME)
-        var contactName = "신규"
-
-        try {
-            context.contentResolver.query(uri, projection, null, null, null)?.use { cursor ->
-                if (cursor.moveToFirst()) {
-                    val nameIndex = cursor.getColumnIndex(android.provider.ContactsContract.PhoneLookup.DISPLAY_NAME)
-                    if (nameIndex >= 0) {
-                        contactName = cursor.getString(nameIndex)
-                        Log.d(TAG, "주소록에서 이름 매칭 성공: $contactName")
-                    }
-                }
-            }
-        } catch (e: Exception) {
-            Log.e(TAG, "주소록 조회 실패 (권한이 없거나 오류 발생)", e)
-        }
-        return contactName
     }
 
     /**

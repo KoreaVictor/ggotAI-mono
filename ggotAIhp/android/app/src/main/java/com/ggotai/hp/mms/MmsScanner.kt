@@ -76,8 +76,14 @@ object MmsScanner {
                 val sender = PhoneNumberNormalizer.normalize(queryFrom(context, message.id))
                 if (sender.isEmpty()) continue
 
+                // 밀린 메시지를 몰아서 처리할 때(휴대폰이 꺼져 있었거나 앱이 한참 뒤에
+                // 재시작된 경우, 최대 6시간 전까지) now 는 이 메시지가 실제 도착한 시각보다
+                // 훨씬 뒤다. now 기준으로 스티키를 판정하면 실제로는 직전 주문 문자의
+                // 10분 스티키 창 안에 도착한 메시지도 "진행 중 아님"으로 잘못 판정되어,
+                // 키워드 없는 후속 문자(가격·주소·받는분)와 사진 전용 후속 메시지(키워드
+                // 대체 규칙이 없어 무조건 폐기됨)가 유실된다. 메시지 자신의 도착 시각을 써야 한다.
                 val active = dao.countRecentBySender(
-                    SmsReceiver.CHANNEL_SMS, sender, MessageGroupDecider.stickySince(now)
+                    SmsReceiver.CHANNEL_SMS, sender, MessageGroupDecider.stickySince(message.receivedAt)
                 ) > 0
 
                 val body = MmsBodyAssembler.assemble(parts, active) ?: continue
@@ -111,6 +117,12 @@ object MmsScanner {
         } catch (e: Exception) {
             // 권한 미허용도 여기로 온다. 조용히 실패하면 통째로 놓치는 걸 알 방법이 없다.
             Log.e(TAG, "MMS 스캔 실패: ${e.message}")
+            // 예외가 나기 전까지 이미 버퍼에 넣은 메시지가 있을 수 있다(일부 단말은
+            // content://mms 의 특정 행에서만 예외를 던진다). 워터마크는 그대로 둬 다음
+            // 스캔이 이 구간을 다시 읽게 하되(countDuplicate 가 중복 삽입을 막는다),
+            // 이미 적재된 메시지는 flush 를 예약해 두지 않으면 다음 스캔에서 중복으로
+            // 걸러져 collected 가 0이 되고 영영 업로드되지 않는다.
+            if (collected > 0) MessageFlushWorker.schedule(context)
             return false
         }
 

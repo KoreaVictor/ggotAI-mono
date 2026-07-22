@@ -8,6 +8,7 @@ import android.util.Log
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.MessageBuffer
 import com.ggotai.hp.manager.DeviceStatus
+import com.ggotai.hp.policy.MessageGroupDecider
 import com.ggotai.hp.policy.OrderTextFilter
 import com.ggotai.hp.worker.MessageFlushWorker
 import kotlinx.coroutines.CoroutineScope
@@ -51,8 +52,11 @@ class SmsReceiver : BroadcastReceiver() {
                 val dao = AppDatabase.getDatabase(context).messageBufferDao()
 
                 // 진행 중인 주문 대화면 키워드 없는 후속 문자도 받는다 — 가격·배송일·
-                // 받는분이 뒷 통에 담겨 오기 때문이다.
-                val active = dao.countBySender(CHANNEL_SMS, sender) > 0
+                // 받는분이 뒷 통에 담겨 오기 때문이다. 스티키 창이 지나면 업로드가 밀려
+                // 버퍼가 남아 있어도 풀린다(사생활 보호).
+                val active = dao.countRecentBySender(
+                    CHANNEL_SMS, sender, MessageGroupDecider.stickySince(received)
+                ) > 0
                 if (!OrderTextFilter.shouldCollect(sender, body, active)) {
                     Log.d(TAG, "주문 후보 아님 — 폐기 (서버 전송 안 함)")
                     return@launch

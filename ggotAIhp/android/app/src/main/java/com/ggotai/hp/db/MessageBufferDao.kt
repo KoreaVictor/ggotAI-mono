@@ -30,12 +30,18 @@ interface MessageBufferDao {
     @Query("SELECT COUNT(*) FROM message_buffer")
     suspend fun count(): Int
 
-    /** 이 대화방에 아직 안 올린 주문 메시지가 있는지(=주문 대화 진행 중). */
+    /**
+     * 이 대화방에 최근 받은 주문 메시지가 있는지(=주문 대화 진행 중).
+     *
+     * "버퍼에 행이 있는가"가 아니라 "최근에 받았는가"로 묻는다 — 업로드가 계속 실패해
+     * 버퍼가 안 비는 동안 무관한 대화까지 수집되는 것을 막기 위해서다. 기준 시각은
+     * [com.ggotai.hp.policy.MessageGroupDecider.stickySince].
+     */
     @Query(
         "SELECT COUNT(*) FROM message_buffer WHERE channel_order = :channelOrder " +
-            "AND sender_key = :senderKey"
+            "AND sender_key = :senderKey AND received_at >= :since"
     )
-    suspend fun countBySender(channelOrder: String, senderKey: String): Int
+    suspend fun countRecentBySender(channelOrder: String, senderKey: String, since: Long): Int
 
     /**
      * 같은 메시지가 이미 버퍼에 있는지. 카톡은 알림을 갱신·재게시하므로 같은 내용이

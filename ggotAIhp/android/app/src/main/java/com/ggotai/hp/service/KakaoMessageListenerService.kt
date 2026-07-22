@@ -11,6 +11,7 @@ import com.ggotai.hp.db.MessageBuffer
 import com.ggotai.hp.manager.DeviceStatus
 import com.ggotai.hp.policy.KakaoNotice
 import com.ggotai.hp.policy.KakaoNotificationPolicy
+import com.ggotai.hp.policy.MessageGroupDecider
 import com.ggotai.hp.worker.MessageFlushWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,9 +55,12 @@ class KakaoMessageListenerService : NotificationListenerService() {
             try {
                 val dao = AppDatabase.getDatabase(applicationContext).messageBufferDao()
 
-                // 같은 대화방에 이미 주문 메시지가 쌓여 있으면 후속 메시지는 키워드 없이도
-                // 받는다 — 가격·배송일·받는분이 뒷 통에 담겨 오기 때문이다.
-                val active = dao.countBySender(CHANNEL_KAKAO, senderKey) > 0
+                // 같은 대화방에 최근 주문 메시지가 있으면 후속 메시지는 키워드 없이도
+                // 받는다 — 가격·배송일·받는분이 뒷 통에 담겨 오기 때문이다. 스티키 창이
+                // 지나면 업로드가 밀려 버퍼가 남아 있어도 풀린다(사생활 보호).
+                val active = dao.countRecentBySender(
+                    CHANNEL_KAKAO, senderKey, MessageGroupDecider.stickySince(System.currentTimeMillis())
+                ) > 0
                 // 거절은 로그로 남기지 않는다 — 사장님 카톡은 남의 단톡·요약 알림이 하루
                 // 수백 건이라 로그를 채우기만 하고 진단 가치가 없다.
                 val candidate = KakaoNotificationPolicy.collectible(notice, active) ?: return@launch

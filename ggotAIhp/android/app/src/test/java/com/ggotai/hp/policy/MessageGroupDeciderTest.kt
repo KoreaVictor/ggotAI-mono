@@ -52,4 +52,22 @@ class MessageGroupDeciderTest {
     fun `기본 디바운스는 3분이다`() {
         assertTrue(MessageGroupDecider.DEBOUNCE_MILLIS == 3 * minute)
     }
+
+    @Test
+    fun `스티키 창은 디바운스보다 길어야 한다`() {
+        // 짧으면 확정 직전에 온 정상 후속 메시지가 키워드 없다고 버려진다.
+        assertTrue(MessageGroupDecider.STICKY_WINDOW_MILLIS > MessageGroupDecider.DEBOUNCE_MILLIS)
+    }
+
+    @Test
+    fun `기본 스티키 창은 10분이다`() {
+        assertTrue(MessageGroupDecider.STICKY_WINDOW_MILLIS == 10 * minute)
+    }
+
+    @Test
+    fun `스티키 기준시각은 지금에서 창만큼 뺀 값이다`() {
+        val now = 1_000_000L
+        assertTrue(MessageGroupDecider.stickySince(now) == now - 10 * minute)
+        assertTrue(MessageGroupDecider.stickySince(now, windowMillis = 5 * minute) == now - 5 * minute)
+    }
 }

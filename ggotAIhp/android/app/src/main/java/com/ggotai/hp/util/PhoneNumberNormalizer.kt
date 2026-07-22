@@ -13,13 +13,24 @@ package com.ggotai.hp.util
 object PhoneNumberNormalizer {
 
     fun normalize(raw: String?): String {
-        val cleaned = raw?.trim().orEmpty().filter { it.isDigit() || it == '+' }
+        // +는 맨 앞에 있을 때만 국가번호 표시로서 의미가 있다. 괄호 안에 국가번호를
+        // 덧붙여 보내는 경우처럼 중간에 낀 +까지 살리면 대화방 키가 오염된다.
+        val cleaned = raw?.trim().orEmpty()
+            .filterIndexed { index, c -> c.isDigit() || (c == '+' && index == 0) }
         if (cleaned.isEmpty()) return ""
 
-        if (!cleaned.startsWith("+")) return cleaned
-        if (!cleaned.startsWith("+82")) return cleaned
+        // 국내 번호는 0으로 시작하거나(휴대폰) 15xx/16xx/18xx 같은 8자리 대표번호라
+        // 82로 시작할 수 없다. 일부 통신사는 +를 떼고 82로 시작하는 형태로 그대로 주기도
+        // 하므로, "82로 시작 + 국가번호가 붙은 길이(11자리 이상)"일 때만 국제형으로 본다.
+        // 자리수 조건 없이 82 시작만으로 판단하면 우연히 82로 시작하는 다른 번호를
+        // 잘못 건드릴 위험이 있어 방어적으로 길이를 함께 본다.
+        val national = when {
+            cleaned.startsWith("+82") -> cleaned.removePrefix("+82")
+            !cleaned.startsWith("+") && cleaned.startsWith("82") && cleaned.length >= 11 ->
+                cleaned.removePrefix("82")
+            else -> return cleaned
+        }
 
-        val national = cleaned.removePrefix("+82")
         if (national.isEmpty()) return ""
         // 국제형은 보통 국내 0 을 뗀 형태(+82 10 …)지만, 0 을 남겨 주는 곳도 있다.
         return if (national.startsWith("0")) national else "0$national"

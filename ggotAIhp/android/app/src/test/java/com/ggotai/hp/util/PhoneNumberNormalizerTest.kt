@@ -48,4 +48,22 @@ class PhoneNumberNormalizerTest {
         // OrderTextFilter 의 대량발송 차단이 이 형태를 보고 판단한다.
         assertEquals("15881234", PhoneNumberNormalizer.normalize("1588-1234"))
     }
+
+    @Test
+    fun `plus 없이 82로 시작하는 국제형도 국내형으로 바꾼다`() {
+        // 통신사에 따라 +를 떼고 82로 시작하는 형태로 주는 경우가 있다.
+        assertEquals("01049534339", PhoneNumberNormalizer.normalize("821049534339"))
+    }
+
+    @Test
+    fun `82로 시작해도 국제형이라 보기엔 짧으면 손대지 않는다`() {
+        // 국내 번호는 82로 시작하지 않지만, 방어적으로 자리수가 짧으면(11자리 미만) 건드리지 않는다.
+        assertEquals("821234", PhoneNumberNormalizer.normalize("82-1234"))
+    }
+
+    @Test
+    fun `맨 앞이 아닌 플러스는 버린다`() {
+        // 괄호 안에 국가번호를 덧붙여 보내는 등, 중간에 낀 + 가 키를 오염시키면 안 된다.
+        assertEquals("0104953433982", PhoneNumberNormalizer.normalize("010-4953-4339(+82)"))
+    }
 }

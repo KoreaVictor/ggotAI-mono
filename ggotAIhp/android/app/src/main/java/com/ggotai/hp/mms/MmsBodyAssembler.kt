@@ -28,15 +28,26 @@ object MmsBodyAssembler {
         contentType.substringBefore(';').trim()
 
     /**
+     * @param subject MMS 의 sub 컬럼(제목). 삼성 메시지 등 일부 발신자(주로 LMS·피처폰)는
+     *   본문을 파트가 아니라 이 제목에 담아 보낸다 — 파트만 보면 글이 하나도 없어 사진뿐인
+     *   메시지로 오분류되거나 그대로 버려진다. 인코딩된 값이어도(=?UTF-8?B?...?= 등) 별도
+     *   디코딩 없이 있는 그대로 쓴다 — 의존성을 늘리느니 원문 그대로 두는 편이 안전하다.
      * @return 버퍼에 담을 본문. 담을 것이 없으면 null.
      *   파트가 아예 없으면(본문 미다운로드) 역시 null 이다 — 호출부가 이 경우를
      *   워터마크 전진 중단으로 따로 다룬다.
      */
-    fun assemble(parts: List<MmsPart>, hasActiveConversation: Boolean): String? {
-        val text = parts
+    fun assemble(parts: List<MmsPart>, hasActiveConversation: Boolean, subject: String? = null): String? {
+        val partsText = parts
             .filter { bareContentType(it.contentType).equals(TEXT_TYPE, ignoreCase = true) }
             .mapNotNull { it.text?.trim()?.takeIf { line -> line.isNotEmpty() } }
             .joinToString("\n")
+
+        val subjectText = subject?.trim().orEmpty()
+        val text = when {
+            subjectText.isEmpty() -> partsText
+            partsText.isEmpty() -> subjectText
+            else -> "$subjectText\n$partsText"
+        }
         if (text.isNotEmpty()) return text
 
         val hasMedia = parts.any {

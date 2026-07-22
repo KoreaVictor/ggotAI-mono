@@ -91,4 +91,39 @@ class MmsBodyAssemblerTest {
         )
         assertEquals("근조화환 하나", body)
     }
+
+    @Test
+    fun `제목만 있고 글 파트가 없으면 제목을 본문으로 쓴다`() {
+        // 삼성 메시지 등 일부 발신자(LMS·피처폰)는 본문을 파트가 아니라 MMS 제목에 담아
+        // 보낸다. 파트만 보면 사진뿐인 메시지로 오분류되거나 그대로 버려진다.
+        val body = MmsBodyAssembler.assemble(
+            listOf(smil), hasActiveConversation = false, subject = "근조화환 하나"
+        )
+        assertEquals("근조화환 하나", body)
+    }
+
+    @Test
+    fun `제목과 글 파트가 모두 있으면 제목을 앞에 붙인다`() {
+        val body = MmsBodyAssembler.assemble(
+            listOf(text("10만원짜리로")), hasActiveConversation = false, subject = "근조화환 주문"
+        )
+        assertEquals("근조화환 주문\n10만원짜리로", body)
+    }
+
+    @Test
+    fun `제목이 공백뿐이면 없는 것으로 본다`() {
+        val body = MmsBodyAssembler.assemble(
+            listOf(text("근조화환 하나")), hasActiveConversation = false, subject = "   "
+        )
+        assertEquals("근조화환 하나", body)
+    }
+
+    @Test
+    fun `제목도 글 파트도 없고 사진뿐이면 기존 규칙대로 처리한다`() {
+        // subject 파라미터 추가가 기존 사진 전용 처리 로직에 영향을 주지 않는지 확인.
+        val body = MmsBodyAssembler.assemble(
+            listOf(smil, image), hasActiveConversation = true, subject = null
+        )
+        assertEquals("사진을 보냈습니다.", body)
+    }
 }

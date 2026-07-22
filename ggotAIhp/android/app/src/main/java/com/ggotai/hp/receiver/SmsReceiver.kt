@@ -12,6 +12,7 @@ import com.ggotai.hp.policy.MessageGroupDecider
 import com.ggotai.hp.policy.OrderTextFilter
 import com.ggotai.hp.util.ContactLookup
 import com.ggotai.hp.util.CustomerResolver
+import com.ggotai.hp.util.PhoneNumberNormalizer
 import com.ggotai.hp.worker.MessageFlushWorker
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -44,7 +45,11 @@ class SmsReceiver : BroadcastReceiver() {
         if (messages.isNullOrEmpty()) return
 
         // 장문은 여러 PDU로 쪼개져 도착한다 — 한 통으로 되붙인다.
-        val sender = messages.firstOrNull()?.originatingAddress ?: return
+        // MMS 는 발신번호를 +8210… 형태로 줄 때가 있다(로밍·국제 라우팅·일부 MVNO/게이트웨이).
+        // 여기서 정규화해 두지 않으면 같은 사람의 SMS 행과 MMS 행이 서로 다른 senderKey 로
+        // 갈라져, 키워드 없는 후속 문자가 빈 대화방으로 판정돼 조용히 폐기된다.
+        val sender = PhoneNumberNormalizer.normalize(messages.firstOrNull()?.originatingAddress)
+        if (sender.isEmpty()) return
         val body = messages.joinToString("") { it.messageBody ?: "" }
 
         val received = System.currentTimeMillis()

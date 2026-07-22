@@ -50,6 +50,19 @@ class PhoneNumberNormalizerTest {
     }
 
     @Test
+    fun `국제형 대표번호는 0을 붙이지 않는다`() {
+        // +8215881234 를 기계적으로 0을 붙이면 9자리(015881234)가 되어
+        // OrderTextFilter.isMassSender 의 8자리 판정을 피해가 대량발송 차단이 뚫린다.
+        assertEquals("15881234", PhoneNumberNormalizer.normalize("+8215881234"))
+    }
+
+    @Test
+    fun `국제형 011 같은 옛 이동통신 9자리는 0을 붙인다`() {
+        // 011은 대표번호(15/16/18 로 시작)가 아니므로 일반 규칙대로 0을 붙인다.
+        assertEquals("0112345678", PhoneNumberNormalizer.normalize("+82112345678"))
+    }
+
+    @Test
     fun `plus 없이 82로 시작하는 국제형도 국내형으로 바꾼다`() {
         // 통신사에 따라 +를 떼고 82로 시작하는 형태로 주는 경우가 있다.
         assertEquals("01049534339", PhoneNumberNormalizer.normalize("821049534339"))

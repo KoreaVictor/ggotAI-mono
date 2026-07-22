@@ -75,7 +75,10 @@ class LoginActivity : AppCompatActivity() {
             Manifest.permission.READ_EXTERNAL_STORAGE,
             Manifest.permission.READ_CONTACTS,
             // 문자 주문 수집 — 없으면 SmsReceiver 가 아예 호출되지 않는다.
-            Manifest.permission.RECEIVE_SMS
+            Manifest.permission.RECEIVE_SMS,
+            // 긴 문자(LMS)는 MMS 로 온다. 같은 SMS 권한 그룹이라 보통 함께 부여되지만,
+            // 자동 부여가 안 되는 기기를 대비해 명시적으로 요청한다.
+            Manifest.permission.RECEIVE_MMS
         )
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)

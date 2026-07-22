@@ -30,6 +30,7 @@ import com.ggotai.hp.databinding.ActivityMainBinding
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
 import com.ggotai.hp.receiver.CallReceiver
+import com.ggotai.hp.worker.MmsScanWorker
 import com.ggotai.hp.worker.ResendWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -56,6 +57,8 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 앱이 죽어 있던 동안 온 긴 문자를 따라잡는다(최대 6시간).
+        MmsScanWorker.schedule(this, delayMillis = 0)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

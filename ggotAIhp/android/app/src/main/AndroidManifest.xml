@@ -17,7 +17,9 @@
     <!-- 문자 주문 수집 (카톡은 알림 접근 — 사용자가 설정에서 직접 허용) -->
     <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
-    
+    <!-- 긴 문자(LMS)는 MMS 로 도착한다 — RECEIVE_SMS 만으로는 못 받는다. -->
+    <uses-permission android:name="android.permission.RECEIVE_MMS" />
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"
@@ -68,6 +70,16 @@
             android:permission="android.permission.BROADCAST_SMS">
             <intent-filter android:priority="999">
                 <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
+
+        <!-- 긴 문자(LMS) 수집. MMS 는 WAP push 로 도착한다. -->
+        <receiver android:name=".receiver.MmsReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_WAP_PUSH">
+            <intent-filter android:priority="999">
+                <action android:name="android.provider.Telephony.WAP_PUSH_RECEIVED" />
+                <data android:mimeType="application/vnd.wap.mms-message" />
             </intent-filter>
         </receiver>
     </application>

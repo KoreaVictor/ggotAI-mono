@@ -63,8 +63,11 @@ object MmsBodyAssembler {
         val subjectText = usableSubject(subject)
 
         if (partsText.isNotEmpty()) {
-            // 글 파트가 있으면 사진 유무와 무관하게 글이 본문이다. 제목이 있으면 앞에 붙인다.
-            return if (subjectText.isEmpty()) partsText else "$subjectText\n$partsText"
+            // 글 파트가 있으면 그것만이 본문이다. 제목은 버린다 — 국내 LMS 는 본문 앞부분을
+            // 잘라 제목에 그대로 넣는 경우가 대부분이라, 붙이면 첫 줄이 중복된다.
+            // (실측 2026-07-22: 제목="사장님 안녕하세요 내일", 본문 첫 줄이 같은 문장으로 시작)
+            // 제목이 쓸모 있는 경우는 글 파트가 아예 없을 때뿐이고, 그건 아래에서 다룬다.
+            return partsText
         }
 
         // 여기부터는 글 파트가 없다. 미디어가 있는데 제목을 본문 대신 그대로 돌려주면,

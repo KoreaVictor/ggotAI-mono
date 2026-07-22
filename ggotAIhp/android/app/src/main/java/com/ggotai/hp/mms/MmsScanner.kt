@@ -223,7 +223,10 @@ object MmsScanner {
         val rows = mutableListOf<MmsRow>()
         context.contentResolver.query(
             Telephony.Mms.Inbox.CONTENT_URI,
-            arrayOf(Telephony.Mms._ID, Telephony.Mms.DATE, Telephony.Mms.SUBJECT),
+            arrayOf(
+                Telephony.Mms._ID, Telephony.Mms.DATE,
+                Telephony.Mms.SUBJECT, Telephony.Mms.SUBJECT_CHARSET
+            ),
             "${Telephony.Mms.DATE} >= ? AND ${Telephony.Mms.DATE} <= ?",
             arrayOf((startAt / 1000).toString(), (endAt / 1000).toString()),
             "${Telephony.Mms.DATE} ASC"
@@ -231,12 +234,16 @@ object MmsScanner {
             val idIndex = cursor.getColumnIndexOrThrow(Telephony.Mms._ID)
             val dateIndex = cursor.getColumnIndexOrThrow(Telephony.Mms.DATE)
             val subjectIndex = cursor.getColumnIndexOrThrow(Telephony.Mms.SUBJECT)
+            val charsetIndex = cursor.getColumnIndexOrThrow(Telephony.Mms.SUBJECT_CHARSET)
             while (cursor.moveToNext()) {
                 rows.add(
                     MmsRow(
                         cursor.getLong(idIndex),
                         cursor.getLong(dateIndex) * 1000,
-                        cursor.getString(subjectIndex)
+                        // 프로바이더가 UTF-8 제목을 Latin-1 로 읽어 주는 기기가 있다(실측).
+                        MmsSubjectDecoder.decode(
+                            cursor.getString(subjectIndex), cursor.getInt(charsetIndex)
+                        )
                     )
                 )
             }

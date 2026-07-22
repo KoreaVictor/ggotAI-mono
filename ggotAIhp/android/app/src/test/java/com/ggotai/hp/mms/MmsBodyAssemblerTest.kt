@@ -103,11 +103,15 @@ class MmsBodyAssemblerTest {
     }
 
     @Test
-    fun `제목과 글 파트가 모두 있으면 제목을 앞에 붙인다`() {
+    fun `글 파트가 있으면 제목은 버린다`() {
+        // 국내 LMS 는 본문 앞부분을 잘라 제목에 그대로 넣는다 — 붙이면 첫 줄이 중복된다.
+        // 실측(2026-07-22): 제목="사장님 안녕하세요 내일", 본문도 같은 문장으로 시작.
         val body = MmsBodyAssembler.assemble(
-            listOf(text("10만원짜리로")), hasActiveConversation = false, subject = "근조화환 주문"
+            listOf(text("근조화환 주문 10만원짜리로")),
+            hasActiveConversation = false,
+            subject = "근조화환 주문"
         )
-        assertEquals("근조화환 주문\n10만원짜리로", body)
+        assertEquals("근조화환 주문 10만원짜리로", body)
     }
 
     @Test

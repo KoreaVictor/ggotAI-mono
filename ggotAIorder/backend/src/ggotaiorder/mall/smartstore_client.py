@@ -124,7 +124,7 @@ class HttpSmartStoreClient:
         self, cred: MallCredential
     ) -> tuple[list[SmartStoreOrder], str]:
         token = self._get_token(cred)
-        last_changed_from = cred.cursor or self._default_from()
+        last_changed_from = self._normalize_iso(cred.cursor) or self._default_from()
 
         # 1) 결제완료(PAYED) 상태로 바뀐 상품주문 번호 목록.
         changed = httpx.get(
@@ -139,8 +139,9 @@ class HttpSmartStoreClient:
         product_order_ids = [
             s.get("productOrderId") for s in statuses if s.get("productOrderId")
         ]
-        # 다음 커서: 응답이 알려주는 lastChangedTo(없으면 현재 시각).
-        next_cursor = cdata.get("lastChangedTo") or self._now_iso()
+        # 다음 커서: 응답이 알려주는 lastChangedTo(없으면 현재 시각). 응답값이라도
+        # 그대로 믿지 않고 정규화한다 — 다음 요청의 lastChangedFrom 이 되기 때문이다.
+        next_cursor = self._normalize_iso(cdata.get("lastChangedTo")) or self._now_iso()
 
         if not product_order_ids:
             return [], next_cursor
@@ -235,3 +236,21 @@ class HttpSmartStoreClient:
         return (datetime.now(_KST) - timedelta(hours=DEFAULT_LOOKBACK_HOURS)).isoformat(
             timespec="milliseconds"
         )
+
+    def _normalize_iso(self, value: str | None) -> str | None:
+        """커서를 커머스API 가 받는 ISO-8601 형식(밀리초 필수)으로 맞춘다.
+
+        네이버는 `lastChangedFrom` 에 밀리초가 없으면 400("유효한 ISO-8601 포맷이
+        아닙니다")을 준다. 타임존 오프셋과 시각의 오래됨은 무관하다(라이브 확인).
+        커서는 폴링이 성공해야 전진하므로, 형식이 어긋난 값이 한 번 저장되면 수집이
+        영구히 멈춘다 — 그래서 저장할 때도 쓸 때도 여기를 거친다.
+
+        읽을 수 없는 값은 None 을 돌려 호출부가 기본 조회창으로 되돌아가게 한다.
+        """
+        if not value:
+            return None
+        try:
+            return datetime.fromisoformat(value).isoformat(timespec="milliseconds")
+        except ValueError:
+            logger.warning("커서 형식을 읽을 수 없어 기본 조회창으로 대체: %r", value)
+            return None

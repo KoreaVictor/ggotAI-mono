@@ -9,6 +9,7 @@ _to_order LIVE-RECONCILE 주석 참조) — 이 테스트의 가짜 JSON 과 매
 from __future__ import annotations
 
 import base64
+import re
 
 import bcrypt
 import pytest
@@ -207,6 +208,57 @@ def test_fetch_new_orders_sends_bearer_and_payed_filter(monkeypatch):
     query = next(c for c in fake.calls if "/product-orders/query" in c[1])
     assert query[0] == "POST"
     assert query[2]["json"]["productOrderIds"] == ["PO1"]
+
+
+def test_fetch_new_orders_normalizes_cursor_without_millis(monkeypatch):
+    """밀리초 없는 커서를 그대로 보내면 네이버가 400 을 준다(라이브 확인).
+
+    커서는 성공해야 전진하므로, 한 번 이런 값이 저장되면 폴링이 영구히 막힌다
+    (실제로 2026-07-06 커서로 16일간 400 이 반복됐다).
+    """
+    fake = FakeHttp({
+        "/oauth2/token": _token_resp(),
+        "/last-changed-statuses": _changed_resp([]),
+    })
+    monkeypatch.setattr(sc_mod, "httpx", fake)
+
+    HttpSmartStoreClient().fetch_new_orders(_cred(cursor="2026-07-06T01:26:05+00:00"))
+
+    changed = next(c for c in fake.calls if "/last-changed-statuses" in c[1])
+    assert changed[2]["params"]["lastChangedFrom"] == "2026-07-06T01:26:05.000+00:00"
+
+
+def test_fetch_new_orders_normalizes_cursor_from_response(monkeypatch):
+    """응답의 lastChangedTo 에 밀리초가 없어도 다음 요청에 쓸 수 있게 저장한다."""
+    fake = FakeHttp({
+        "/oauth2/token": _token_resp(),
+        "/last-changed-statuses": FakeResp({"data": {
+            "lastChangeStatuses": [],
+            "lastChangedTo": "2026-07-22T10:00:00+09:00",
+        }}),
+    })
+    monkeypatch.setattr(sc_mod, "httpx", fake)
+
+    _, next_cursor = HttpSmartStoreClient().fetch_new_orders(_cred())
+
+    assert next_cursor == "2026-07-22T10:00:00.000+09:00"
+
+
+def test_fetch_new_orders_falls_back_when_cursor_unparseable(monkeypatch):
+    """읽을 수 없는 커서는 기본 조회창으로 대체한다 — 400 으로 멈추지 않게."""
+    fake = FakeHttp({
+        "/oauth2/token": _token_resp(),
+        "/last-changed-statuses": _changed_resp([]),
+    })
+    monkeypatch.setattr(sc_mod, "httpx", fake)
+
+    HttpSmartStoreClient().fetch_new_orders(_cred(cursor="쓰레기값"))
+
+    changed = next(c for c in fake.calls if "/last-changed-statuses" in c[1])
+    sent = changed[2]["params"]["lastChangedFrom"]
+    assert sent != "쓰레기값"
+    # 기본 조회창 형식(밀리초 포함)이어야 한다.
+    assert re.match(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}[+-]\d{2}:\d{2}$", sent)
 
 
 def test_confirm_order_posts_ids(monkeypatch):

@@ -1,9 +1,10 @@
 import type React from 'react';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../supabase';
 import { useSession } from '../session/SessionContext';
 import { completeHoldOrder, getOrders, requeueOrder, type HoldPatch, type OrderRow } from '../orders/client';
 import { isUnknownDeliveryAt, toDateTimeLocal, toKstIso } from '../orders/holdForm';
+import { shouldWatch, WATCH_INTERVAL_MS } from '../orders/readyWatch';
 import type { DashRpc } from '../dashboard/client';
 import { channelLabel } from '../dashboard/currentTask';
 import {
@@ -80,9 +81,10 @@ export function OrderListView() {
   const [modalSuccess, setModalSuccess] = useState('');
   const [modalError, setModalError] = useState('');
 
-  const loadOrders = async () => {
+  const loadOrders = async (quiet = false) => {
     if (!shopKey || !readToken) { setLoadError('세션이 만료되었습니다. 다시 로그인해주세요.'); setLoading(false); return; }
-    setLoading(true);
+    // quiet: 대기중 결과를 지켜보는 자동 재조회 — 로딩 표시를 깜빡이지 않는다.
+    if (!quiet) setLoading(true);
     const r = await getOrders(rpc, shopKey, readToken, {
       channel,
       status: statusFilter === 'all' ? null : statusFilter,
@@ -104,6 +106,29 @@ export function OrderListView() {
     loadOrders();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [shopKey, readToken, channel, statusFilter]);
+
+  // 대기중 주문이 있으면 결과가 나올 때까지 조용히 다시 조회한다.
+  // 이게 없으면 재전송·보완저장 후 백엔드가 입력을 끝내도 화면은 계속 '대기중'이라,
+  // 사장님이 성공했는지 실패했는지 알 수 없다(2026-07-22 실사용에서 확인).
+  const hasPending = shouldWatch(orders, 0);
+  const watchStartedAt = useRef<number | null>(null);
+  const ordersRef = useRef(orders);
+  ordersRef.current = orders;
+  useEffect(() => {
+    if (!hasPending) { watchStartedAt.current = null; return; }
+    if (watchStartedAt.current === null) watchStartedAt.current = Date.now();
+
+    const timer = setInterval(() => {
+      const startedAt = watchStartedAt.current;
+      if (startedAt === null || !shouldWatch(ordersRef.current, Date.now() - startedAt)) {
+        clearInterval(timer);
+        return;
+      }
+      loadOrders(true);
+    }, WATCH_INTERVAL_MS);
+    return () => clearInterval(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [hasPending]);
 
   // 텍스트 검색(불러온 행 narrowing)
   const filteredOrders = orders.filter((order) => {

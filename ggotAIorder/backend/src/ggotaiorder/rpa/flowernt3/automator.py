@@ -25,6 +25,18 @@ MAIN_PATH = "/main.asp"
 # 직접 order3.asp로 이동하면 프레임셋이 깨져 inputform이 사라지고 등록이 누락된다.
 CONTENT_FRAME_NAME = "flowernt3Main"
 
+# 재로그인 대기: 고정 시간으로 끊지 않고 조건이 만족될 때까지 본다.
+#
+# 라이브 실패 3건(2026-07-21~22)이 전부 '몇 시간 쉰 뒤 첫 주문'에서 났다. 그 상태에서는
+# Chrome 이 백그라운드 탭을 얼리거나 연결이 식어 화면이 평소보다 늦게 뜬다. 따뜻한
+# 상태에서는 8번 시도해도 재현되지 않았다(고정 0.5초로 늘 충분했다) — 즉 '얼마면
+# 되는가'는 답이 없는 질문이라 조건 기반으로 바꾼다.
+LOGIN_POLL_INTERVAL_MS = 200
+# 로그인 칸이 뜨기를 기다리는 한도.
+LOGIN_FORM_TIMEOUT_MS = 10_000
+# 엔터 뒤 로그인이 반영되기를 기다리는 한도.
+LOGIN_APPLY_TIMEOUT_MS = 15_000
+
 
 def _cdp_url(debug_port: int) -> str:
     # localhost는 ::1(IPv6)로 풀려 CDP 연결이 거부될 수 있어 127.0.0.1로 고정.
@@ -299,28 +311,75 @@ class FlowerNt3Automator:
             logger.info("FlowerNT3 CDP 연결 실패 — 미구동으로 처리(백업)")
             return False
 
+    def _poll_attempts(self, timeout_ms: int) -> int:
+        return max(1, timeout_ms // LOGIN_POLL_INTERVAL_MS)
+
+    def _find_login_form(self, page):
+        """로그인 칸(ms_id/ms_pass)이 나타날 때까지 기다렸다가 (프레임, id, pw)를 반환.
+
+        한도 안에 안 나타나면 (None, None, None). 폼은 프레임 안에 있을 수 있어 전
+        프레임을 훑는다. 한 번만 훑고 포기하면, 화면이 조금만 늦어도 로그인을 시도조차
+        못 하고 실패로 처리된다(라이브 실패의 유력 원인).
+        """
+        for _ in range(self._poll_attempts(LOGIN_FORM_TIMEOUT_MS)):
+            for fr in page.frames:
+                try:
+                    id_el = fr.query_selector("input[name=ms_id]")
+                    pw_el = fr.query_selector("input[name=ms_pass]")
+                except Exception:
+                    continue  # 이동 중 detach 된 프레임
+                if id_el and pw_el:
+                    return fr, id_el, pw_el
+            page.wait_for_timeout(LOGIN_POLL_INTERVAL_MS)
+        return None, None, None
+
+    def _wait_logged_in(self, page) -> bool:
+        """로그인이 반영될 때까지 기다린다. 한도를 넘으면 마지막 판정을 그대로 돌려준다."""
+        for _ in range(self._poll_attempts(LOGIN_APPLY_TIMEOUT_MS)):
+            if self._logged_in(page):
+                return True
+            page.wait_for_timeout(LOGIN_POLL_INTERVAL_MS)
+        return self._logged_in(page)
+
     def _try_login(self, page) -> bool:
-        """저장된 자격증명으로 로그인 시도. 실패/자격증명 없음이면 False."""
+        """저장된 자격증명으로 로그인 시도. 실패/자격증명 없음이면 False.
+
+        실패했을 때 왜 실패했는지 반드시 남긴다 — 지금까지 이 함수는 아무 흔적 없이
+        False 만 돌려줘, 라이브에서 재로그인이 왜 안 되는지 추적할 방법이 없었다.
+        """
         if not (self.login_id and self.login_password):
+            logger.warning("FlowerNT3 재로그인 불가 — 저장된 자격증명 없음")
             return False
         try:
             page.goto(self.url, wait_until="domcontentloaded")
-            page.wait_for_timeout(500)
-            # 로그인 폼(ms_id/ms_pass)은 프레임 안에 있을 수 있어 전 프레임을 탐색.
-            for fr in page.frames:
-                id_el = fr.query_selector("input[name=ms_id]")
-                pw_el = fr.query_selector("input[name=ms_pass]")
-                if id_el and pw_el:
-                    id_el.fill(self.login_id)
-                    pw_el.fill(self.login_password)
-                    pw_el.press("Enter")
-                    page.wait_for_load_state("domcontentloaded")
-                    page.wait_for_timeout(800)
-                    return self._logged_in(page)
-            # 로그인 폼을 못 찾았으면 이미 로그인 상태일 수 있음
-            return self._logged_in(page)
-        except Exception:
-            logger.warning("FlowerNT3 자동 로그인 실패")
+
+            fr, id_el, pw_el = self._find_login_form(page)
+            if id_el is None:
+                # 이미 로그인 상태여서 폼이 없는 것일 수도 있다 — 그건 정상 통과.
+                if self._logged_in(page):
+                    return True
+                logger.warning(
+                    "FlowerNT3 재로그인 실패 — 로그인 칸을 %.1f초 안에 못 찾음. 프레임=%s",
+                    LOGIN_FORM_TIMEOUT_MS / 1000,
+                    [(f.name, f.url) for f in page.frames],
+                )
+                return False
+
+            id_el.fill(self.login_id)
+            pw_el.fill(self.login_password)
+            pw_el.press("Enter")
+            page.wait_for_load_state("domcontentloaded")
+
+            if self._wait_logged_in(page):
+                return True
+            logger.warning(
+                "FlowerNT3 재로그인 실패 — 입력은 했으나 %.1f초 안에 반영 안 됨(자격증명·차단 의심). 프레임=%s",
+                LOGIN_APPLY_TIMEOUT_MS / 1000,
+                [(f.name, f.url) for f in page.frames],
+            )
+            return False
+        except Exception as e:
+            logger.warning("FlowerNT3 자동 로그인 실패: %r", e)
             return False
 
     def input_order(self, order: RpaOrder) -> None:

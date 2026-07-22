@@ -16,6 +16,15 @@ object PhoneNumberNormalizer {
     private val REP_NUMBER_PREFIXES = listOf("15", "16", "18")
     private const val REP_NUMBER_LENGTH = 8
 
+    /**
+     * bare-82(+ 없이 82로 시작)를 국제형으로 볼 때 국내 부분의 그럴듯한 길이 범위.
+     * 대표번호(8자리)부터 휴대폰(10자리)까지를 국내 부분으로 인정한다 — 자리수
+     * 조건 없이 82 시작만으로 판단하면 우연히 82로 시작하는 다른 번호(짧은 내선 등)를
+     * 잘못 건드릴 위험이 있다.
+     */
+    private const val MIN_PLAUSIBLE_NATIONAL_LENGTH = 8
+    private const val MAX_PLAUSIBLE_NATIONAL_LENGTH = 10
+
     fun normalize(raw: String?): String {
         // +는 맨 앞에 있을 때만 국가번호 표시로서 의미가 있다. 괄호 안에 국가번호를
         // 덧붙여 보내는 경우처럼 중간에 낀 +까지 살리면 대화방 키가 오염된다.
@@ -25,12 +34,15 @@ object PhoneNumberNormalizer {
 
         // 국내 번호는 0으로 시작하거나(휴대폰) 15xx/16xx/18xx 같은 8자리 대표번호라
         // 82로 시작할 수 없다. 일부 통신사는 +를 떼고 82로 시작하는 형태로 그대로 주기도
-        // 하므로, "82로 시작 + 국가번호가 붙은 길이(11자리 이상)"일 때만 국제형으로 본다.
-        // 자리수 조건 없이 82 시작만으로 판단하면 우연히 82로 시작하는 다른 번호를
-        // 잘못 건드릴 위험이 있어 방어적으로 길이를 함께 본다.
+        // 한다 — 대표번호(8215881234, 10자리)도 이 형태로 오므로, 예전처럼 11자리
+        // 이상만 국제형으로 보면 대표번호가 국내형으로 안 바뀌고 그대로 새어나가
+        // isMassSender(정확히 8자리) 판정을 비켜간다. +82 경로와 똑같이 "국내 부분이
+        // 그럴듯한 길이(8~10자리)"인지로 판단해, 같은 [formatNational] 규칙을 그대로 태운다
+        // — 두 경로가 따로 놀면 +8215881234 와 8215881234 가 다른 결과로 갈라진다.
         val national = when {
             cleaned.startsWith("+82") -> cleaned.removePrefix("+82")
-            !cleaned.startsWith("+") && cleaned.startsWith("82") && cleaned.length >= 11 ->
+            !cleaned.startsWith("+") && cleaned.startsWith("82") &&
+                isPlausibleNationalLength(cleaned.removePrefix("82")) ->
                 cleaned.removePrefix("82")
             else -> return cleaned
         }
@@ -38,6 +50,9 @@ object PhoneNumberNormalizer {
         if (national.isEmpty()) return ""
         return formatNational(national)
     }
+
+    private fun isPlausibleNationalLength(national: String): Boolean =
+        national.length in MIN_PLAUSIBLE_NATIONAL_LENGTH..MAX_PLAUSIBLE_NATIONAL_LENGTH
 
     /**
      * 국가번호(82)를 뗀 국내 부분을 국내형으로 맞춘다.

@@ -16,6 +16,7 @@ import com.ggotai.hp.util.ContactLookup
 import com.ggotai.hp.util.CustomerResolver
 import com.ggotai.hp.util.PhoneNumberNormalizer
 import com.ggotai.hp.worker.MessageFlushWorker
+import kotlinx.coroutines.CancellationException
 
 /**
  * 긴 문자(LMS) 수집.
@@ -77,9 +78,17 @@ object MmsScanner {
         // 폐기)한 id는 워터마크와 별개로 따로 기억해 재조회되더라도 다시 처리하지 않는다.
         val handledIds = loadHandledIds(prefs)
         val newlyHandled = mutableSetOf<Long>()
+        // 이번 조회 구간에 실제로 잡힌 id들. handled 목록을 가지치기할 때, 이 구간 밖으로
+        // 나간 이전 id는 다시 조회될 수 없으니 굳이 남겨 두지 않는다(MmsHandledIds 참고).
+        // null 은 "조회 자체가 실패해 이번 스캔이 창을 전혀 보지 못했다"는 뜻이다 — 이
+        // 경우 무엇이 빠졌는지 알 수 없으니, 뒤에서 이전 handledIds 전체를 그대로
+        // 보존하는 쪽(가지치기 생략)으로 대체해 안전하게 간다.
+        var seenNow: Set<Long>? = null
 
         try {
-            for (message in queryInbox(context, startAt, now)) {
+            val queriedRows = queryInbox(context, startAt, now)
+            seenNow = queriedRows.map { it.id }.toSet()
+            for (message in queriedRows) {
                 if (message.id in handledIds) continue
 
                 val parts = queryParts(context, message.id)
@@ -153,6 +162,12 @@ object MmsScanner {
                 collected++
                 Log.d(TAG, "버퍼 적재(MMS) sender=$sender bodyLen=${body.length} active=$active")
             }
+        } catch (e: CancellationException) {
+            // SmsReceiver/MainActivity 모두 ExistingWorkPolicy.REPLACE 로 스캔을 예약한다 —
+            // 스캔 도중 취소되는 건 새 MMS/재실행이 뒤이어 온 정상 상황이다. 아래 일반
+            // Exception 처리로 떨어지면 진짜 오류(권한·커서 등)처럼 Log.e 로 남아 나중에
+            // 이 로그를 보는 사람을 오도한다 — 그대로 다시 던져 정상 취소로 흘러가게 한다.
+            throw e
         } catch (e: Exception) {
             // 권한 미허용도 여기로 온다. 조용히 실패하면 통째로 놓치는 걸 알 방법이 없다.
             Log.e(TAG, "MMS 스캔 실패: ${e.message}")
@@ -161,7 +176,10 @@ object MmsScanner {
             // handled 로 남겨 둬야, 워터마크가 이 구간을 다시 읽을 때(아래에서 워터마크는
             // 그대로 두므로 다음 스캔이 이 구간을 다시 읽는다) 이미 업로드된 메시지가
             // 재조회 시점에 버퍼에서 이미 지워져 있어도 다시 삽입되지 않는다.
-            saveHandledIds(prefs, handledIds + newlyHandled)
+            saveHandledIds(
+                prefs,
+                MmsHandledIds.pruneHandledIds(handledIds, seenNow ?: handledIds, newlyHandled, MAX_HANDLED_IDS)
+            )
             // 이미 적재된 메시지는 flush 를 예약해 두지 않으면 다음 스캔에서 중복으로
             // 걸러져 collected 가 0이 되고 영영 업로드되지 않는다.
             if (collected > 0) MessageFlushWorker.schedule(context)
@@ -171,7 +189,12 @@ object MmsScanner {
             throw e
         }
 
-        saveHandledIds(prefs, handledIds + newlyHandled)
+        // 여기 도달했다는 것 자체가 try 블록이 예외 없이 끝났다는 뜻이라 seenNow 는
+        // 항상 채워져 있다(두 catch 모두 rethrow 로 끝나 예외 시엔 아래로 내려오지 않는다).
+        saveHandledIds(
+            prefs,
+            MmsHandledIds.pruneHandledIds(handledIds, seenNow, newlyHandled, MAX_HANDLED_IDS)
+        )
         prefs.edit()
             .putLong(KEY_WATERMARK, MmsScanWindow.nextWatermark(now, earliestIncompleteAt))
             .apply()
@@ -186,11 +209,10 @@ object MmsScanner {
             ?.mapNotNull { it.toLongOrNull() }
             ?.toSet() ?: emptySet()
 
-    /** 처리 완료 id 집합을 저장한다. _ID가 단조증가라는 성질을 이용해 최근 N개만 남긴다. */
+    /** 처리 완료 id 집합을 저장한다. 무엇을 남길지는 [MmsHandledIds.pruneHandledIds] 가 정한다. */
     private fun saveHandledIds(prefs: SharedPreferences, ids: Set<Long>) {
-        val bounded = ids.sortedDescending().take(MAX_HANDLED_IDS)
         prefs.edit()
-            .putStringSet(KEY_HANDLED_IDS, bounded.map { it.toString() }.toSet())
+            .putStringSet(KEY_HANDLED_IDS, ids.map { it.toString() }.toSet())
             .apply()
     }
 

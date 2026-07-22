@@ -79,4 +79,29 @@ class PhoneNumberNormalizerTest {
         // 괄호 안에 국가번호를 덧붙여 보내는 등, 중간에 낀 + 가 키를 오염시키면 안 된다.
         assertEquals("0104953433982", PhoneNumberNormalizer.normalize("010-4953-4339(+82)"))
     }
+
+    @Test
+    fun `plus 없는 82 대표번호도 국내형으로 바꾼다`() {
+        // 버그: 예전에는 11자리 미만이라는 이유로 8215881234 가 그대로 새어나가
+        // isMassSender(정확히 8자리) 판정을 비켜갔다. +82 경로와 같은 결과가 나와야 한다.
+        assertEquals("15881234", PhoneNumberNormalizer.normalize("8215881234"))
+    }
+
+    @Test
+    fun `plus 없는 82 011 9자리도 0을 붙인다`() {
+        assertEquals("0112345678", PhoneNumberNormalizer.normalize("82112345678"))
+    }
+
+    @Test
+    fun `016 처럼 10자리 국내부분은 8자리 대표번호로 오인하지 않는다`() {
+        // 016으로 시작하는 10자리 휴대폰 번호를 8자리 대표번호(REP_NUMBER_LENGTH) 규칙으로
+        // 잘못 판단하면 0이 안 붙는다 — 길이가 정확히 8일 때만 대표번호 규칙을 적용해야 한다.
+        assertEquals("01612345678", PhoneNumberNormalizer.normalize("+821612345678"))
+    }
+
+    @Test
+    fun `국내부분이 너무 짧으면 82로 시작해도 대표번호로 보지 않는다`() {
+        // 8자리 미만은 국내 부분일 수 없으니 82로 시작하는 다른 번호로 보고 손대지 않는다.
+        assertEquals("8212345", PhoneNumberNormalizer.normalize("8212345"))
+    }
 }

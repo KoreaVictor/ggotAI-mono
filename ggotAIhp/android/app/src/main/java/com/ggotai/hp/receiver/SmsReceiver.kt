@@ -48,8 +48,18 @@ class SmsReceiver : BroadcastReceiver() {
         // MMS 는 발신번호를 +8210… 형태로 줄 때가 있다(로밍·국제 라우팅·일부 MVNO/게이트웨이).
         // 여기서 정규화해 두지 않으면 같은 사람의 SMS 행과 MMS 행이 서로 다른 senderKey 로
         // 갈라져, 키워드 없는 후속 문자가 빈 대화방으로 판정돼 조용히 폐기된다.
-        val sender = PhoneNumberNormalizer.normalize(messages.firstOrNull()?.originatingAddress)
-        if (sender.isEmpty()) return
+        val rawAddress = messages.firstOrNull()?.originatingAddress?.trim().orEmpty()
+        val normalized = PhoneNumberNormalizer.normalize(rawAddress)
+        // normalize 는 숫자와 맨 앞 +만 남긴다 — "KAKAO", "Naver" 같은 영숫자 발신자는
+        // 걸러진 뒤 아무것도 안 남아 빈 문자열이 된다. 이전 라운드까지는 원문 발신자로
+        // 그대로 필터에 넘겼는데, 여기서 빈 문자열을 그대로 쓰면 그 발신자의 문자는
+        // 로그도 없이 통째로 사라진다 — 이 기능이 없애려던 바로 그 실패를 새로 만드는
+        // 셈이라, 정규화 결과가 비면 정규화 전 원문으로 대체한다.
+        val sender = normalized.ifEmpty { rawAddress }
+        if (sender.isEmpty()) {
+            Log.w(TAG, "발신 주소를 확인할 수 없음 — 폐기")
+            return
+        }
         val body = messages.joinToString("") { it.messageBody ?: "" }
 
         val received = System.currentTimeMillis()

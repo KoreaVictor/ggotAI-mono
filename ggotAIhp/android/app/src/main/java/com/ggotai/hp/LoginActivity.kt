@@ -78,7 +78,12 @@ class LoginActivity : AppCompatActivity() {
             Manifest.permission.RECEIVE_SMS,
             // 긴 문자(LMS)는 MMS 로 온다. 같은 SMS 권한 그룹이라 보통 함께 부여되지만,
             // 자동 부여가 안 되는 기기를 대비해 명시적으로 요청한다.
-            Manifest.permission.RECEIVE_MMS
+            Manifest.permission.RECEIVE_MMS,
+            // MmsScanner 가 MMS 수신함(content://mms)을 읽는 데 필요하다. MainActivity 는
+            // 이미 RECEIVE_MMS 와 함께 이 권한을 요구하도록 고쳐졌는데, 여기(신규 설치
+            // 경로)만 빠뜨리면 SMS 권한 그룹 동시 부여에만 기대게 된다 — MainActivity 를
+            // 고친 이유가 바로 그 가정에 기대지 않기 위해서였다.
+            Manifest.permission.READ_SMS
         )
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
             requiredPermissions.add(Manifest.permission.POST_NOTIFICATIONS)

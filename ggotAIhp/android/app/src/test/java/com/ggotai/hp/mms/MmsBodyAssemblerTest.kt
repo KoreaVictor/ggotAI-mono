@@ -126,4 +126,35 @@ class MmsBodyAssemblerTest {
         )
         assertEquals("사진을 보냈습니다.", body)
     }
+
+    @Test
+    fun `인코딩된 제목은 무시하고 사진 자리표시를 그대로 쓴다`() {
+        // RFC 2047 인코딩 단어(=?EUC-KR?B?...?=)가 제목 자리를 대신 차지하면 안 된다.
+        val body = MmsBodyAssembler.assemble(
+            listOf(smil, image),
+            hasActiveConversation = true,
+            subject = "=?EUC-KR?B?7ZWY7Yq47KO87IS4?="
+        )
+        assertEquals("사진을 보냈습니다.", body)
+    }
+
+    @Test
+    fun `인코딩된 제목이면 비활성 대화에서도 새어나가지 않는다`() {
+        // 예전 버그: 글 파트가 없어도 media 체크 전에 제목을 그대로 돌려줘,
+        // 비활성 대화의 쓰레기 제목이 그대로 서버로 샐 수 있었다.
+        val body = MmsBodyAssembler.assemble(
+            listOf(smil, image),
+            hasActiveConversation = false,
+            subject = "=?EUC-KR?B?7ZWY7Yq47KO87IS4?="
+        )
+        assertNull(body)
+    }
+
+    @Test
+    fun `사진뿐이고 쓸만한 제목이 있으면 제목 다음 줄에 자리표시를 붙인다`() {
+        val body = MmsBodyAssembler.assemble(
+            listOf(smil, image), hasActiveConversation = true, subject = "사진 제목"
+        )
+        assertEquals("사진 제목\n사진을 보냈습니다.", body)
+    }
 }

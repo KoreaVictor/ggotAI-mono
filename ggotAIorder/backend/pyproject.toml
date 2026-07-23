@@ -20,6 +20,7 @@ dependencies = [
     "python-multipart>=0.0.30",  # fastapi Form/multipart 엔드포인트(인입 webhook)
     "uvicorn>=0.48.0",           # api 서버 구동
     "httpx>=0.28.1",             # notifier.provider (알림톡 HTTP 발송)
+    "bcrypt>=4.0.0",             # mall.smartstore_client 네이버 커머스API 전자서명(HMAC 아님, bcrypt)
     "APScheduler>=3.11.2",       # orchestrator (인트라넷 정기 폴링)
     "pystray>=0.19.5",           # tray (트레이 아이콘)
     "Pillow>=12.2.0",            # pystray 아이콘 이미지

@@ -69,6 +69,46 @@ class RealtimeListener:
             self._shop_key,
         )
 
+    def _is_connection_healthy(self) -> bool:
+        """realtime 소켓이 실제로 살아 메시지를 받고 있는지 확인한다.
+
+        realtime-py 2.5.3 은 서버발 1001(going away)을 ConnectionClosedOK 로 받는데,
+        _on_connect_error 가 ConnectionClosedError 만 재연결시켜 이 close 는 무시된다.
+        그 결과 죽은 소켓이 그대로 남아 is_connected 는 True 인데 listen 루프만 죽고,
+        하트비트만 25초마다 헛돌며 재구독이 영영 안 된다(실측 336회/14시간, 재구독 0회).
+        → is_connected 만으로는 wedge 를 못 잡으므로 listen 태스크 생존까지 함께 본다.
+        """
+        client = self._client
+        if client is None:
+            return False
+        try:
+            rt = client.realtime
+        except Exception:  # noqa: BLE001 - 내부 구조 접근 실패는 비정상으로 간주
+            return False
+        if not getattr(rt, "is_connected", False):
+            return False
+        # listen 루프가 죽었으면(=위 wedge) 소켓이 살아 보여도 비정상.
+        listen_task = getattr(rt, "_listen_task", None)
+        if listen_task is None:
+            # 신호를 얻을 수 없으면(내부 구조 변경 등) 오탐 재생성을 피해 정상으로 본다.
+            return True
+        return not listen_task.done()
+
+    async def ensure_healthy(self) -> None:
+        """연결이 wedge 면 클라이언트를 통째로 재생성한다(watchdog).
+
+        realtime-py 내부 자동재연결이 1001 후 복구를 못 하므로, 앱 계층에서
+        stop()+start() 로 새 소켓·새 구독을 만들어 실시간 처리를 되살린다.
+        """
+        if self._is_connection_healthy():
+            return
+        logger.warning("Realtime 연결 wedge 감지 — 재구독(클라이언트 재생성) 수행")
+        try:
+            await self.stop()
+        except Exception:  # noqa: BLE001 - 재시작을 막지 않도록 흡수
+            logger.exception("watchdog stop 중 예외(무시하고 재시작 진행)")
+        await self.start()
+
     async def stop(self) -> None:
         """구독을 해제하고 async 클라이언트 소켓을 닫는다."""
         if self._channel is not None:

@@ -135,3 +135,91 @@ async def test_order_update_without_id_does_not_raise(monkeypatch):
     rl._process_order_update({"shop_key": 19, "rpa_status": "ready"})
     await asyncio.sleep(0)
 
+
+# --- watchdog: realtime-py 2.5.3 이 서버발 1001(ConnectionClosedOK)에 재연결을
+#     안 걸어 소켓이 죽은 채 is_connected 만 True 로 남는 wedge 를 복구한다. ---
+
+
+class _FakeTask:
+    def __init__(self, done: bool) -> None:
+        self._done = done
+
+    def done(self) -> bool:
+        return self._done
+
+
+class _FakeRealtime:
+    def __init__(self, is_connected: bool, listen_task) -> None:
+        self.is_connected = is_connected
+        self._listen_task = listen_task
+
+
+class _FakeClient:
+    def __init__(self, *, is_connected: bool, listen_done: bool) -> None:
+        self.realtime = _FakeRealtime(is_connected, _FakeTask(listen_done))
+
+
+def test_healthy_when_connected_and_listen_alive():
+    rl = RealtimeListener(shop_key=19)
+    rl._client = _FakeClient(is_connected=True, listen_done=False)
+    assert rl._is_connection_healthy() is True
+
+
+def test_unhealthy_when_listen_task_done():
+    """wedge: 소켓은 살아있다고(is_connected=True) 보이지만 listen 루프가 죽었다."""
+    rl = RealtimeListener(shop_key=19)
+    rl._client = _FakeClient(is_connected=True, listen_done=True)
+    assert rl._is_connection_healthy() is False
+
+
+def test_unhealthy_when_not_connected():
+    rl = RealtimeListener(shop_key=19)
+    rl._client = _FakeClient(is_connected=False, listen_done=False)
+    assert rl._is_connection_healthy() is False
+
+
+def test_unhealthy_when_no_client():
+    rl = RealtimeListener(shop_key=19)
+    assert rl._client is None
+    assert rl._is_connection_healthy() is False
+
+
+async def test_ensure_healthy_rebuilds_when_wedged(monkeypatch):
+    """wedge 감지 시 stop() 후 start() 로 클라이언트를 통째 재생성해야 한다."""
+    rl = RealtimeListener(shop_key=19)
+    calls: list[str] = []
+
+    async def stop_spy() -> None:
+        calls.append("stop")
+
+    async def start_spy() -> None:
+        calls.append("start")
+
+    monkeypatch.setattr(rl, "stop", stop_spy)
+    monkeypatch.setattr(rl, "start", start_spy)
+    monkeypatch.setattr(rl, "_is_connection_healthy", lambda: False)
+
+    await rl.ensure_healthy()
+
+    assert calls == ["stop", "start"]
+
+
+async def test_ensure_healthy_noop_when_healthy(monkeypatch):
+    """정상 연결이면 재생성하지 않는다(불필요한 churn 방지)."""
+    rl = RealtimeListener(shop_key=19)
+    calls: list[str] = []
+
+    async def stop_spy() -> None:
+        calls.append("stop")
+
+    async def start_spy() -> None:
+        calls.append("start")
+
+    monkeypatch.setattr(rl, "stop", stop_spy)
+    monkeypatch.setattr(rl, "start", start_spy)
+    monkeypatch.setattr(rl, "_is_connection_healthy", lambda: True)
+
+    await rl.ensure_healthy()
+
+    assert calls == []
+

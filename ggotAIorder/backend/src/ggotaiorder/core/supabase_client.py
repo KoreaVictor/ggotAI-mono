@@ -11,6 +11,7 @@ import logging
 import threading
 import time
 
+import httpx
 from supabase import Client, create_client
 
 from ggotaiorder.config import Config, load_config
@@ -61,6 +62,24 @@ def _instrument(session):
     return session
 
 
+def _force_http1(session: httpx.Client) -> None:
+    """httpx 세션을 HTTP/1.1 전송으로 교체한다(WinError 10035 대책).
+
+    WinError 10035(WSAEWOULDBLOCK)는 httpcore HTTP/2 동기 백엔드의 Windows read
+    레이스에서 나고, http2 단일 공유 소켓이 저장된 read 예외를 이후 요청에 재전파해
+    같은 순간 여러 요청을 동시 실패시킨다(증폭). http2 를 끄면 요청별 h1 커넥션 풀로
+    바뀌어 두 문제가 함께 사라진다. 헤더·인증·base_url 은 Client 레벨 상태라 전송
+    계층과 무관하므로, _transport 만 교체하면 인증을 깨지 않고 프로토콜만 바꾼다.
+    """
+    old = getattr(session, "_transport", None)
+    session._transport = httpx.HTTPTransport(http2=False)
+    if old is not None:
+        try:
+            old.close()
+        except Exception:  # noqa: BLE001 - best-effort 정리
+            logger.debug("이전 전송 close 중 예외(무시)", exc_info=True)
+
+
 def get_client(cfg: Config | None = None) -> Client:
     """싱글턴 Supabase 클라이언트를 반환한다."""
     global _client
@@ -69,6 +88,8 @@ def get_client(cfg: Config | None = None) -> Client:
         _client = create_client(cfg.supabase_url, cfg.supabase_service_role_key)
         # postgrest 세션은 지연 생성이라 여기서 한 번 건드려 만든 뒤 계측한다.
         _instrument(_client.postgrest.session)
+        # http2 공유 소켓의 WinError 10035 회피 — h1 전송으로 교체.
+        _force_http1(_client.postgrest.session)
     return _client
 
 

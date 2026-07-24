@@ -38,6 +38,9 @@ logs/
 # RPA 비상 백업(런타임 산출물)
 backend/backups/
 
+# 관리 프로그램 종류 캐시(런타임 산출물 — 로그온 시 DB 조회 실패 대비)
+backend/.rpa_program_type
+
 # 에디터
 .vscode/
 .idea/

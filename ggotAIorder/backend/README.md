@@ -10,9 +10,22 @@ backend\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 backend\.venv\Scripts\python.exe -m pip install -e backend
 ```
 
+### 관리 프로그램별 자동입력(RPA) 의존성
+
+꽃집이 쓰는 주문관리 프로그램에 맞는 extra만 설치한다. 안 쓰는 쪽은 설치하지 않는다
+(설치돼 있지 않아도 수집엔진은 정상 기동하며, 해당 주문은 백업(manual) 경로로 흐른다).
+
+```powershell
+# FlowerNT(웹) 쓰는 가게
+backend\.venv\Scripts\python.exe -m pip install -e "backend[flowernt]"
+backend\.venv\Scripts\python.exe -m playwright install chromium
+
+# RoseWeb(데스크톱 앱) 쓰는 가게
+backend\.venv\Scripts\python.exe -m pip install -e "backend[roseweb]"
+```
+
 후속 세션에서 필요 시:
 ```powershell
-backend\.venv\Scripts\python.exe -m playwright install chromium
 backend\.venv\Scripts\python.exe backend\.venv\Scripts\pywin32_postinstall.py -install
 ```
 

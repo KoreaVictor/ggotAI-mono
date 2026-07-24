@@ -18,8 +18,10 @@ faster-whisper
 google-genai
 pydantic
 
-# --- 웹 자동화 ---
-playwright
+# --- 관리 프로그램 자동입력(RPA) ---
+# 프로그램별 의존성은 여기 두지 않는다. 가게가 쓰는 프로그램의 extra 만 설치할 것:
+#   pip install -e "backend[flowernt]"   # playwright (FlowerNT 웹)
+#   pip install -e "backend[roseweb]"    # uiautomation (RoseWeb 데스크톱)
 
 # --- Windows 서비스 / 트레이 ---
 pywin32; sys_platform == "win32"

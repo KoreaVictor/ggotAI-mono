@@ -30,6 +30,20 @@ try {
 
     Start-ScheduledTask -TaskName "ggotAIorder"
 
+    # Which order program does this shop use? Only used for the closing hint -
+    # the Chrome task itself is registered either way and launch_rpa_chrome.ps1
+    # decides at run time, so a shop switching programs later self-corrects.
+    $programType = 'unknown'
+    $typeScript  = Join-Path $PSScriptRoot 'backend\scripts\rpa_program_type.py'
+    $pythonExe   = Resolve-Python
+    if ($pythonExe -and (Test-Path $typeScript)) {
+        try {
+            $out = & $pythonExe $typeScript
+            if ($LASTEXITCODE -eq 0 -and $out) { $programType = ([string]$out).Trim() }
+        } catch { }
+    }
+    Write-Host ("Order program: {0}" -f $programType)
+
     # --- RPA dedicated Chrome (CDP) ---------------------------------------
     # FlowerNt3Automator connects over CDP (127.0.0.1:9222) to a dedicated
     # Chrome profile. Launch it on logon too, via launch_rpa_chrome.ps1.
@@ -87,7 +101,11 @@ try {
     Write-Host (" ggotAIorder-HealthCheck State: " + $th.State)
     Write-Host " Both auto-start on Windows logon." -ForegroundColor Green
     Write-Host " HealthCheck re-runs every 60 min and on unlock (survives sleep/hibernate)." -ForegroundColor Green
-    Write-Host " First time only: log in to FlowerNT3 once in the RPA Chrome window." -ForegroundColor Green
+    if ($programType -eq 'flowernt' -or $programType -eq 'unknown') {
+        Write-Host " First time only: log in to FlowerNT3 once in the RPA Chrome window." -ForegroundColor Green
+    } else {
+        Write-Host (" Order program is '{0}' - the FlowerNT Chrome window is not used." -f $programType) -ForegroundColor Green
+    }
     Write-Host "==================================================" -ForegroundColor Green
 }
 catch {

@@ -52,6 +52,10 @@ class RoseWebAutomator:
         self._key_wait = 0.03
         self._clip_pause = 0.15   # 클립보드 반영 대기
         self._lookup_pause = 1.2  # 팝업 검색·선택 반영 대기(DB 조회라 느리다)
+        # 저장 후 폼이 닫히기를 기다리는 시간. 넉넉히 잡는다 — 여기서 성급히 포기하면
+        # 실제로는 등록된 주문을 'fail'로 오판해 백업·재입력으로 중복을 만든다. 폼 채우기만
+        # 19~25초 걸리는 환경(느린 PC·DB)이 있어, 저장 확정도 그만큼 느릴 수 있다.
+        self._save_confirm_timeout = 30.0
 
     # --- 창 찾기 --------------------------------------------------------
     def _find_window(self, class_name: str):
@@ -209,7 +213,7 @@ class RoseWebAutomator:
         auto.Click(r.left + x, r.top + y)
 
         # 저장 후 검증 대화상자(TMessageForm)가 뜨면 등록이 막힌 것이다.
-        deadline = time.monotonic() + 8.0
+        deadline = time.monotonic() + self._save_confirm_timeout
         while time.monotonic() < deadline:
             time.sleep(0.5)
             dlg = self._blocking_dialog()
@@ -224,6 +228,13 @@ class RoseWebAutomator:
 
     # --- ProgramAutomator 계약 -------------------------------------------
     def is_program_running(self) -> bool:
+        """구동 가능 상태면 True. **순수 조회가 아니라 side effect 가 있다.**
+
+        미기동이면 RoseWeb 을 직접 띄우고 최대 ~25초 대기한다(사장님 무조작 원칙).
+        이는 이 프로젝트의 관례로, FlowerNt3Automator.is_program_running 도 같은 식으로
+        전용 Chrome 을 띄운다. 폴링 용도로 부르면 프로세스를 계속 띄우게 되니 주의.
+        enqueue 는 asyncio.to_thread 로 한 번만 호출하므로 안전하다.
+        """
         try:
             if not self._ensure_running():
                 return False

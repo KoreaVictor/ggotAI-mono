@@ -475,27 +475,21 @@ def test_save_raises_when_dialog_blocks(monkeypatch):
 
 
 def test_save_raises_when_form_stays_open(monkeypatch):
-    """대화상자도 없는데 폼이 안 닫히면 저장이 확정되지 않은 것이다."""
+    """대화상자도 없는데 폼이 안 닫히면 저장이 확정되지 않은 것이다.
+
+    다만 타임아웃은 넉넉해야 한다 — 성급히 raise 하면 실제로 저장된 주문을 fail 로
+    오판해 중복 등록을 부른다. 여기서는 짧게 눌러 빠르게 검증한다.
+    """
     fake = _FakeUia()
     monkeypatch.setattr("ggotaiorder.rpa.roseweb.automator._uia", lambda: fake)
+    monkeypatch.setattr("time.sleep", lambda _s: None)
     a = _automator()
+    a._save_confirm_timeout = 0.05
     monkeypatch.setattr(a, "_blocking_dialog", lambda: None)
     monkeypatch.setattr(a, "_find_window", lambda cls: object())   # 폼 계속 있음
-    monkeypatch.setattr("time.monotonic", _fake_clock())
 
     with pytest.raises(RuntimeError, match="저장 미확정"):
         a._save(_Form())
-
-
-def _fake_clock():
-    """time.monotonic 을 빨리 감아 대기 루프가 즉시 끝나게 한다."""
-    t = [0.0]
-
-    def clock():
-        t[0] += 5.0
-        return t[0]
-
-    return clock
 
 
 class _FakeUia:

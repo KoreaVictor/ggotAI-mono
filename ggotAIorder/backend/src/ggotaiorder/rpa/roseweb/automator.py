@@ -130,13 +130,14 @@ class RoseWebAutomator:
     # --- 주문폼 열기 -----------------------------------------------------
     def _open_new_order(self):
         """F2(주문관리 목록) → Insert(입력 폼). 열린 폼을 돌려준다."""
-        auto = _uia()
         # 이미 폼이 있는데 Insert 를 또 누르면 같은 자리에 폼이 겹쳐 뜬다(실측). 그러면
         # 어느 쪽에 값이 들어갔는지 알 수 없다. is_program_running 이 먼저 막지만,
-        # 직접 호출되는 경로를 위해 여기서도 막는다.
+        # 직접 호출되는 경로를 위해 여기서도 막는다. (이 거부는 키를 보내기 전이라
+        # uiautomation 을 아직 건드리지 않는다 — _uia() 는 그 아래에서 부른다.)
         if self._find_window(layout.FORM_CLASS) is not None:
             raise RuntimeError("RoseWeb 주문폼이 이미 열려 있다 — 겹쳐 열지 않는다")
 
+        auto = _uia()
         listw = self._find_window(layout.LIST_CLASS)
         if listw is None:
             main = self._main_window()

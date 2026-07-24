@@ -6,11 +6,17 @@ RoseWeb는 Delphi VCL + DevExpress 데스크톱 앱이라 컨트롤 식별자가
 사용:
     python -X utf8 backend/scripts/roseweb_inspect.py tree  <창클래스 또는 이름일부>
     python -X utf8 backend/scripts/roseweb_inspect.py edits <창클래스 또는 이름일부>
+    python -X utf8 backend/scripts/roseweb_inspect.py dump  <창클래스> <출력.json>
     python -X utf8 backend/scripts/roseweb_inspect.py wins
+
+`dump` 는 입력칸과 **라벨(정적 텍스트)** 을 폼 기준 상대좌표로 함께 뽑아 JSON 으로 남긴다.
+칸에 값을 넣어보지 않고 라벨-칸 짝으로 필드를 식별하기 위한 것이다 — lookup 칸에 블라인드로
+타이핑하면 검색 팝업·'고객Error' 대화상자가 연쇄로 뜨기 때문에 읽기만으로 매핑해야 한다.
 """
 
 from __future__ import annotations
 
+import json
 import sys
 
 import uiautomation as auto
@@ -91,6 +97,98 @@ def cmd_edits(substr: str) -> None:
     print("--- 입력칸 수:", len(rows))
 
 
+def _is_input(ctrl) -> bool:
+    cls = ctrl.ClassName or ""
+    return (
+        ctrl.ControlTypeName in ("EditControl", "ComboBoxControl")
+        or "Edit" in cls
+        or "Memo" in cls
+    )
+
+
+def _is_label(ctrl) -> bool:
+    """정적 텍스트(라벨). Delphi 는 TLabel/TStaticText, DevExpress 는 그룹 헤더 등."""
+    name = (ctrl.Name or "").strip()
+    if not name:
+        return False
+    if _is_input(ctrl):
+        return False
+    return ctrl.ControlTypeName in ("TextControl", "GroupControl", "HeaderItemControl")
+
+
+def cmd_dump(substr: str, out_path: str) -> None:
+    """입력칸·라벨·버튼·라디오를 폼 기준 상대좌표로 JSON 덤프한다(읽기 전용)."""
+    win = _find(substr)
+    if win is None:
+        print(f"[!] '{substr}' 창을 못 찾음")
+        return
+    wr = win.BoundingRectangle
+    ox, oy = wr.left, wr.top
+
+    inputs, labels, others = [], [], []
+
+    def rec(ch, path, parent):
+        r = ch.BoundingRectangle
+        pr = parent.BoundingRectangle
+        return {
+            # 조상 클래스 체인 + 부모 사각형. 그리드 밑 편집 컨트롤은 화면에 안 보이는 행까지
+            # 노출되는데, 그것들은 부모(그리드) 영역 밖으로 삐져나온다 — 그 점으로 거른다.
+            "path": path,
+            "p_dx": pr.left - ox,
+            "p_dy": pr.top - oy,
+            "p_w": pr.right - pr.left,
+            "p_h": pr.bottom - pr.top,
+            "cls": ch.ClassName or "",
+            "type": ch.ControlTypeName,
+            "name": (ch.Name or "")[:60],
+            "auto_id": ch.AutomationId,
+            # 폼 좌상단 기준 상대좌표. 절대좌표는 창을 옮기면 바뀐다.
+            "dx": r.left - ox,
+            "dy": r.top - oy,
+            "w": r.right - r.left,
+            "h": r.bottom - r.top,
+            # 그리드는 화면에 안 보이는 행의 편집 컨트롤까지 UIA 에 노출한다. 그것들이
+            # 아래쪽 실제 입력칸과 위치가 겹치므로 반드시 걸러야 한다.
+            "offscreen": bool(ch.IsOffscreen),
+            "enabled": bool(ch.IsEnabled),
+        }
+
+    def walk(c, depth=0, path=""):
+        if depth > 12:
+            return
+        for ch in c.GetChildren():
+            try:
+                cls = ch.ClassName or "?"
+                child_path = f"{path}/{cls}" if path else cls
+                if _is_input(ch):
+                    inputs.append(rec(ch, path, c))
+                elif _is_label(ch):
+                    labels.append(rec(ch, path, c))
+                elif ch.ControlTypeName in ("ButtonControl", "RadioButtonControl", "CheckBoxControl"):
+                    others.append(rec(ch, path, c))
+                walk(ch, depth + 1, child_path)
+            except Exception:
+                pass
+
+    walk(win)
+    inputs.sort(key=lambda d: (d["dy"], d["dx"]))
+    labels.sort(key=lambda d: (d["dy"], d["dx"]))
+    others.sort(key=lambda d: (d["dy"], d["dx"]))
+
+    data = {
+        "window": {
+            "name": win.Name, "cls": win.ClassName,
+            "left": ox, "top": oy,
+            "w": wr.right - ox, "h": wr.bottom - oy,
+        },
+        "inputs": inputs, "labels": labels, "others": others,
+    }
+    with open(out_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=1)
+    print(f"창 {win.ClassName} {wr.right - ox}x{wr.bottom - oy} @ ({ox},{oy})")
+    print(f"입력칸 {len(inputs)} · 라벨 {len(labels)} · 버튼/라디오 {len(others)} → {out_path}")
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
     if not args:
@@ -101,5 +199,7 @@ if __name__ == "__main__":
         cmd_tree(args[1])
     elif args[0] == "edits" and len(args) > 1:
         cmd_edits(args[1])
+    elif args[0] == "dump" and len(args) > 2:
+        cmd_dump(args[1], args[2])
     else:
         print(__doc__)

@@ -10,3 +10,37 @@ ggotAI_backup_*/
 # 앱 외 루트 잡파일(추적 제외) — 필요 시 docs/로 정리
 /화면 캡처 *.png
 /ggotAIya/
+
+# ── 런타임·설치 부산물 (커밋·삭제 금지) ──
+# rpa_profile 은 RPA 전용 크롬 프로필(로그인 세션 유지) — 지우면 재로그인 필요
+/rpa_profile/
+/supabase/.temp/
+/vc_redist.x64.exe
+
+# ── 개발 중 캡처·1회용 스크립트 (로컬 전용) ──
+/Rpa/
+/test/
+/_live_diag.py
+/ggotAIya_rpa_section.png
+/ggotAIya_settings_preview.png
+/ggotAIhp/002.jpg
+/ggotAIhp/003.jpg
+/ggotAIhp/06-11-1.png
+/ggotAIhp/06-11.png
+/ggotAIhp/06-12.png
+
+# ── 사장님 로컬 작업 자료·문서 (보존, 추적 제외) ──
+/개발진행/
+/연동/
+/배포/
+/쇼핑몰/
+/수정/
+/아이디어/
+/이미지/
+/작업환경/
+/ggotAIhp/참고자료/
+/ggotAIhp/앱실행참고사항.txt
+/ggotAIhp/질문.txt
+/ggotAIorder/수정/
+/ggotAIorder/질문/
+/ggotAIorder/참고자료/

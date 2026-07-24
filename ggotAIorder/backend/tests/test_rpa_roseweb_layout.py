@@ -40,7 +40,6 @@ def test_match_radius_is_tighter_than_field_spacing():
     assert 0 < layout.FIELD_MATCH_RADIUS < 26 / 2
 
 
-def test_product_needs_lookup_popup():
-    """상품명 직접 타이핑 불가(실측). True 로 바뀌면 Task 5 의 상품 서브루틴 전제가 깨진다."""
-    assert layout.PRODUCT_DIRECT_TYPE is False
-    assert layout.LOOKUP_CLASS == "TFmCodesel"
+def test_product_name_is_free_text():
+    """상품명 칸은 자유 입력(2026-07-24 실측). False 로 바뀌면 lookup 서브루틴이 필요해진다."""
+    assert layout.PRODUCT_DIRECT_TYPE is True

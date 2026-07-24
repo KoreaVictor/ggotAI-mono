@@ -28,7 +28,6 @@ PROC_NAME = "roseweb"
 MAIN_CLASS = "TFmMain"                # 메인 창(자동 로그인 완료 시 제목에 '(관리자)')
 LIST_CLASS = "TFmJumun"               # 주문판매관리 목록 창
 FORM_CLASS = "TFmju1inp"              # 주문판매관리 세부내역 = 입력 폼
-LOOKUP_CLASS = "TFmCodesel"           # 상품코드선택 팝업(상품명 입력 시 뜸)
 
 # 실측 폼 크기. 좌표는 이 크기 기준이라, 다르면 재측정이 필요하다는 신호다.
 FORM_SIZE = (1076, 854)
@@ -40,9 +39,15 @@ OPEN_LIST_KEY = "{F2}"
 OPEN_NEW_KEY = "{Insert}"
 OPEN_NEW_ORDER = "TFmMain 에 포커스 → {F2} → TFmJumun 대기 → 포커스 → {Insert} → TFmju1inp 대기"
 
-# 상품명은 직접 타이핑할 수 없다 — 입력하면 '상품코드선택'(TFmCodesel) 팝업이 뜬다.
-# RoseWeb 은 고정 상품마스터에서 검색·선택하는 구조. 처리는 Task 5 의 상품 서브루틴.
-PRODUCT_DIRECT_TYPE = False
+# 상품명 칸은 자유 입력이다(2026-07-24 실측으로 정정 — 스파이크 기록은 반대였다).
+# '장미'·'동양란' 을 넣고 {Tab} 으로 확정해도 값이 그대로 남고 팝업도 뜨지 않는다.
+# 따라서 상품 lookup 서브루틴 없이 상품명을 그대로 타이핑한다.
+PRODUCT_DIRECT_TYPE = True
+
+# ⚠️ 다만 **상품코드는 비워진 채로 남는다.** 정확한 마스터 상품명을 넣어도 코드가 자동으로
+# 붙지 않는다(실측). 코드를 채우려면 상품코드 칸의 돋보기로 '상품코드선택'(TFmCodesel)
+# 팝업에서 골라야 한다. 코드 없이 저장이 되는지는 **auto_submit=Y 저장 검증에서 확인할 것**.
+LOOKUP_CLASS = "TFmCodesel"
 
 # 필드키 → 폼 좌상단 기준 상대 (dx, dy) = 컨트롤 좌상단.
 # 키 집합은 mapping.order_to_values 의 반환 키와 일치해야 한다.
@@ -51,7 +56,7 @@ FIELD_POSITIONS: dict[str, tuple[int, int]] = {
     "orderer_name": (124, 143),        # TdxDBEdit 160x25
     "orderer_phone": (348, 147),       # TdxDBEdit 144x25 (라벨 '휴대폰')
     # 상품 그리드 1행
-    "product_name": (172, 275),        # TdxDBEdit 278x25 — lookup 팝업 유발
+    "product_name": (172, 275),        # TdxDBEdit 278x25 (자유 입력)
     "unit_price": (504, 276),          # TRxDBCalcEdit 94x24 (단가)
     "quantity": (612, 275),            # TRxDBCalcEdit 46x24
     # 배달

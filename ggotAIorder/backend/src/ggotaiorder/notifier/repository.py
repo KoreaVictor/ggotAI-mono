@@ -16,6 +16,11 @@ DEFAULT_MANUAL_MESSAGE = (
     "[ggotAI] {channel} 주문 {count}건 접수 — 관리 프로그램에 직접 입력해 주세요."
 )
 
+# 보류(필수값 누락) 알림 문구 기본값. setting_info.rpa_hold_message 가 비어 있을 때 사용.
+DEFAULT_HOLD_MESSAGE = (
+    "[ggotAI] {channel} 주문 {count}건 확인 필요 — ggotAIya에서 내용을 채워주세요."
+)
+
 
 @dataclass
 class NotificationSettings:
@@ -25,6 +30,7 @@ class NotificationSettings:
     rpa_manual_message: str
     rpa_fail_message: str
     fallback_mobile: Optional[str]
+    rpa_hold_message: str = DEFAULT_HOLD_MESSAGE
 
 
 class NotifierRepository(Protocol):
@@ -42,7 +48,8 @@ class SupabaseNotifierRepository:
             client.table("setting_info")
             .select(
                 "use_notification, notification_phone_number, "
-                "rpa_success_message, rpa_manual_message, rpa_fail_message"
+                "rpa_success_message, rpa_manual_message, rpa_fail_message, "
+                "rpa_hold_message"
             )
             .eq("shop_key", shop_key)
             .limit(1)
@@ -68,4 +75,5 @@ class SupabaseNotifierRepository:
             rpa_manual_message=row.get("rpa_manual_message") or DEFAULT_MANUAL_MESSAGE,
             rpa_fail_message=row.get("rpa_fail_message") or "",
             fallback_mobile=fallback_mobile,
+            rpa_hold_message=row.get("rpa_hold_message") or DEFAULT_HOLD_MESSAGE,
         )

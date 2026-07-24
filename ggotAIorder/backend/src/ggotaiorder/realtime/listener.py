@@ -14,8 +14,13 @@ from supabase import acreate_client
 
 from ggotaiorder.config import load_config
 from ggotaiorder.pipeline.engine import REALTIME_CHANNELS, process
+from ggotaiorder.rpa.singleton_macro import enqueue
 
 logger = logging.getLogger(__name__)
+
+# 사장님이 보완 저장·재입력을 눌러 자동입력 대기로 되돌린 상태.
+# 그 외 상태(success/fail/manual/hold)는 RPA 가 스스로 남기는 결과라 다시 부르면 루프가 된다.
+RPA_READY_STATUS = "ready"
 
 
 class RealtimeListener:
@@ -49,11 +54,60 @@ class RealtimeListener:
             filter=f"shop_key=eq.{self._shop_key}",
             callback=self._on_message,
         )
+        # 사장님이 보완 저장·재입력으로 되돌린 주문을 즉시 집어가기 위한 구독.
+        self._channel.on_postgres_changes(
+            event="UPDATE",
+            schema="public",
+            table="order_details",
+            filter=f"shop_key=eq.{self._shop_key}",
+            callback=self._on_order_update,
+        )
         await self._channel.subscribe()
         logger.info(
-            "Realtime 구독 시작: server_call_history INSERT (shop_key=%s)",
+            "Realtime 구독 시작: server_call_history INSERT + order_details UPDATE "
+            "(shop_key=%s)",
             self._shop_key,
         )
+
+    def _is_connection_healthy(self) -> bool:
+        """realtime 소켓이 실제로 살아 메시지를 받고 있는지 확인한다.
+
+        realtime-py 2.5.3 은 서버발 1001(going away)을 ConnectionClosedOK 로 받는데,
+        _on_connect_error 가 ConnectionClosedError 만 재연결시켜 이 close 는 무시된다.
+        그 결과 죽은 소켓이 그대로 남아 is_connected 는 True 인데 listen 루프만 죽고,
+        하트비트만 25초마다 헛돌며 재구독이 영영 안 된다(실측 336회/14시간, 재구독 0회).
+        → is_connected 만으로는 wedge 를 못 잡으므로 listen 태스크 생존까지 함께 본다.
+        """
+        client = self._client
+        if client is None:
+            return False
+        try:
+            rt = client.realtime
+        except Exception:  # noqa: BLE001 - 내부 구조 접근 실패는 비정상으로 간주
+            return False
+        if not getattr(rt, "is_connected", False):
+            return False
+        # listen 루프가 죽었으면(=위 wedge) 소켓이 살아 보여도 비정상.
+        listen_task = getattr(rt, "_listen_task", None)
+        if listen_task is None:
+            # 신호를 얻을 수 없으면(내부 구조 변경 등) 오탐 재생성을 피해 정상으로 본다.
+            return True
+        return not listen_task.done()
+
+    async def ensure_healthy(self) -> None:
+        """연결이 wedge 면 클라이언트를 통째로 재생성한다(watchdog).
+
+        realtime-py 내부 자동재연결이 1001 후 복구를 못 하므로, 앱 계층에서
+        stop()+start() 로 새 소켓·새 구독을 만들어 실시간 처리를 되살린다.
+        """
+        if self._is_connection_healthy():
+            return
+        logger.warning("Realtime 연결 wedge 감지 — 재구독(클라이언트 재생성) 수행")
+        try:
+            await self.stop()
+        except Exception:  # noqa: BLE001 - 재시작을 막지 않도록 흡수
+            logger.exception("watchdog stop 중 예외(무시하고 재시작 진행)")
+        await self.start()
 
     async def stop(self) -> None:
         """구독을 해제하고 async 클라이언트 소켓을 닫는다."""
@@ -90,6 +144,40 @@ class RealtimeListener:
             logger.error(
                 "Realtime process 태스크 실패", exc_info=task.exception()
             )
+
+    def _on_order_update(self, payload: dict) -> None:
+        """order_details UPDATE 메시지에서 record를 방어적으로 추출해 처리로 넘긴다."""
+        try:
+            record = (
+                payload.get("data", {}).get("record")
+                or payload.get("record")
+                or payload.get("new")
+            )
+            if record:
+                self._process_order_update(record)
+            else:
+                logger.warning("order_details 메시지에서 record 추출 실패: %s", payload)
+        except Exception:  # noqa: BLE001 - 구독 유지를 위해 콜백 예외 흡수
+            logger.exception("order_details Realtime 콜백 처리 실패")
+
+    def _process_order_update(self, record: dict) -> None:
+        """rpa_status 가 'ready'로 바뀐 내 가게 주문을 즉시 RPA 로 넘긴다.
+
+        보완 저장(complete_hold_order)·재입력(requeue_order)은 DB 상태만 바꾼다.
+        이 구독이 없으면 그 주문을 아무도 집어가지 않아 영원히 대기중으로 남는다.
+        """
+        order_id = record.get("id")
+        status = record.get("rpa_status")
+        # 방어적 재확인: 서버측 필터가 적용 안 됐어도 남의 가게는 skip.
+        if self._shop_key is not None and record.get("shop_key") != self._shop_key:
+            logger.debug("order_details skip(타 shop): id=%s", order_id)
+            return
+        if status != RPA_READY_STATUS or order_id is None:
+            return
+        logger.info("보완/재입력 감지 — RPA 투입 order_id=%s", order_id)
+        task = asyncio.create_task(enqueue(order_id))
+        self._tasks.add(task)
+        task.add_done_callback(self._on_task_done)
 
     def _process_record(self, record: dict) -> None:
         """채널이 핸드폰/가게음성이고 내 가게(shop_key)면 process(id)를 예약한다."""

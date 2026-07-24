@@ -35,4 +35,13 @@ class CustomerResolverTest {
         // contactName이 이미 기본값 "신규"면 무시하고 "신규"
         assertEquals("신규", CustomerResolver.resolveName(null, "신규"))
     }
+
+    @Test
+    fun resolveName_문자는_주소록이름만으로_결정된다() {
+        // 문자에는 통화의 CallLog 캐시명 같은 게 없다(발신번호만 온다).
+        // 주소록에 있으면 그 이름, 없으면 통화와 같은 기본값이어야 한다 —
+        // 예전엔 여기가 비어 고객명 자리에 번호가 그대로 들어갔다.
+        assertEquals("여현동", CustomerResolver.resolveName(null, "여현동"))
+        assertEquals("신규", CustomerResolver.resolveName(null, null))
+    }
 }

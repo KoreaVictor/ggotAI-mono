@@ -7,10 +7,12 @@ import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
 
-@Database(entities = [CallHistory::class], version = 4, exportSchema = false)
+@Database(entities = [CallHistory::class, MessageBuffer::class], version = 5, exportSchema = false)
 abstract class AppDatabase : RoomDatabase() {
 
     abstract fun callHistoryDao(): CallHistoryDao
+
+    abstract fun messageBufferDao(): MessageBufferDao
 
     companion object {
         @Volatile
@@ -37,6 +39,22 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /** v4 → v5: 카톡·문자 메시지 버퍼 추가 (기존 통화 데이터는 그대로). */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    "CREATE TABLE IF NOT EXISTS message_buffer (" +
+                        "id INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, " +
+                        "channel_order TEXT NOT NULL, " +
+                        "sender_key TEXT NOT NULL, " +
+                        "sender_name TEXT NOT NULL, " +
+                        "phone_number TEXT NOT NULL, " +
+                        "body TEXT NOT NULL, " +
+                        "received_at INTEGER NOT NULL)"
+                )
+            }
+        }
+
         fun getDatabase(context: Context): AppDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -44,7 +62,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "ggotai_database"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5)
                     .build()
                 INSTANCE = instance
                 instance

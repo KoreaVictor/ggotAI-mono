@@ -65,6 +65,20 @@ class SmartStoreClient(Protocol):
         ...
 
 
+def _raise_for_status(resp, label: str) -> None:
+    """4xx/5xx 면 응답 본문을 로그에 남긴 뒤 예외를 올린다.
+
+    커머스API 는 실패 원인을 **본문에만** 담는다. 실사건 2건 모두 그랬다 —
+    403 은 ``GW.IP_NOT_ALLOWED``(등록 IP 아님), 400 은 커서 형식(ISO-8601).
+    ``raise_for_status()`` 만 하면 로그에 상태코드만 남아 원인을 못 찾는다.
+    """
+    if resp.status_code >= 400:
+        logger.error(
+            "커머스API %s 실패 %s: %s", label, resp.status_code, (resp.text or "")[:500]
+        )
+    resp.raise_for_status()
+
+
 class HttpSmartStoreClient:
     """네이버 커머스API 실구현."""
 
@@ -97,7 +111,7 @@ class HttpSmartStoreClient:
             "type": "SELF",
         }
         resp = httpx.post(API_BASE + TOKEN_PATH, data=data, timeout=HTTP_TIMEOUT_SEC)
-        resp.raise_for_status()
+        _raise_for_status(resp, "토큰 발급")
         body = resp.json()
         token = body.get("access_token")
         if not token:
@@ -133,7 +147,7 @@ class HttpSmartStoreClient:
             params={"lastChangedFrom": last_changed_from, "lastChangedType": "PAYED"},
             timeout=HTTP_TIMEOUT_SEC,
         )
-        changed.raise_for_status()
+        _raise_for_status(changed, "변경상태 조회")
         cdata = changed.json().get("data") or {}
         statuses = cdata.get("lastChangeStatuses") or []
         product_order_ids = [
@@ -153,7 +167,7 @@ class HttpSmartStoreClient:
             json={"productOrderIds": product_order_ids},
             timeout=HTTP_TIMEOUT_SEC,
         )
-        detail.raise_for_status()
+        _raise_for_status(detail, "주문상세 조회")
         items = detail.json().get("data") or []
         orders = [self._to_order(item) for item in items]
         orders = [o for o in orders if o is not None]
@@ -221,7 +235,7 @@ class HttpSmartStoreClient:
             json={"productOrderIds": [product_order_id]},
             timeout=HTTP_TIMEOUT_SEC,
         )
-        resp.raise_for_status()
+        _raise_for_status(resp, "발주확인")
         data = resp.json().get("data") or {}
         fail_ids = data.get("failProductOrderIds") or []
         if product_order_id in fail_ids:

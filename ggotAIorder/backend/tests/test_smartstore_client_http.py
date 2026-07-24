@@ -295,3 +295,50 @@ def test_signature_still_deterministic():
     a = c._make_signature("cid", _SALT, 1700000000000)
     b = c._make_signature("cid", _SALT, 1700000000000)
     assert a == b
+
+
+# ---- 실패 응답 본문 로깅 ----
+#
+# 실사건 2건 모두 원인이 응답 **본문**에만 있었다: 403 은 GW.IP_NOT_ALLOWED(등록 IP
+# 아님), 400 은 커서 형식. raise_for_status() 만 하면 그 단서가 사라져 로그에는
+# 상태코드밖에 안 남고 진단이 불가능해진다. 4xx 는 본문을 반드시 남긴다.
+
+
+def test_token_failure_logs_response_body(monkeypatch, caplog):
+    body = '{"code":"GW.IP_NOT_ALLOWED","message":"호출이 허용되지 않은 IP입니다."}'
+    fake = FakeHttp({"/oauth2/token": FakeResp(body, status=403)})
+    monkeypatch.setattr(sc_mod, "httpx", fake)
+
+    with caplog.at_level("ERROR"):
+        with pytest.raises(Exception):
+            HttpSmartStoreClient()._get_token(_cred())
+
+    assert "GW.IP_NOT_ALLOWED" in caplog.text
+    assert "403" in caplog.text
+
+
+def test_changed_statuses_failure_logs_response_body(monkeypatch, caplog):
+    body = '{"code":"INVALID","message":"유효한 ISO-8601 포맷이 아닙니다."}'
+    fake = FakeHttp({
+        "/oauth2/token": _token_resp(),
+        "/last-changed-statuses": FakeResp(body, status=400),
+    })
+    monkeypatch.setattr(sc_mod, "httpx", fake)
+
+    with caplog.at_level("ERROR"):
+        with pytest.raises(Exception):
+            HttpSmartStoreClient().fetch_new_orders(_cred("2026-07-06T01:26:05+00:00"))
+
+    assert "ISO-8601" in caplog.text
+    assert "400" in caplog.text
+
+
+def test_success_does_not_log_error(monkeypatch, caplog):
+    # 회귀 방지: 정상 응답에서는 에러 로그가 나오면 안 된다.
+    fake = FakeHttp({"/oauth2/token": _token_resp()})
+    monkeypatch.setattr(sc_mod, "httpx", fake)
+
+    with caplog.at_level("ERROR"):
+        HttpSmartStoreClient()._get_token(_cred())
+
+    assert caplog.text == ""

@@ -1,5 +1,6 @@
 package com.ggotai.hp
 
+import android.Manifest
 import android.app.DatePickerDialog
 import android.content.BroadcastReceiver
 import android.content.ComponentName
@@ -14,8 +15,10 @@ import android.os.PowerManager
 import android.provider.Settings
 import android.util.Log
 import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import androidx.recyclerview.widget.DividerItemDecoration
 import androidx.recyclerview.widget.LinearLayoutManager
@@ -30,6 +33,7 @@ import com.ggotai.hp.databinding.ActivityMainBinding
 import com.ggotai.hp.db.AppDatabase
 import com.ggotai.hp.db.CallHistory
 import com.ggotai.hp.receiver.CallReceiver
+import com.ggotai.hp.worker.MmsScanWorker
 import com.ggotai.hp.worker.ResendWorker
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -54,8 +58,52 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // RECEIVE_MMS·READ_SMS 는 원래 LoginActivity.checkPermissions() 에서만 요청된다. 하지만
+    // 로그인 후 LoginActivity 는 finish() 되어 MainActivity 가 태스크 루트가 되므로, 이미
+    // 로그인된 사장님이 앱을 다시 열거나(또는 프로세스가 죽었다 재생성되거나) 하면
+    // LoginActivity 를 다시 거치지 않고 곧장 여기로 온다. 그 경우 권한이 없으면 MmsScanner 가
+    // SecurityException 으로 조용히 실패해 긴 문자(MMS) 주문이 티 없이 유실된다 — 그래서
+    // 여기서도 상태를 확인하고 필요하면 요청한다.
+    //
+    // MmsScanner 가 실제로 읽는 대상은 content://mms (MMS 저장소)이고, 이를 읽는 데 필요한
+    // 권한은 READ_SMS 다 — RECEIVE_MMS 는 도착 방송을 받는 권한일 뿐 저장소 조회 권한이
+    // 아니다. 두 권한은 같은 SMS 런타임 권한 그룹이라 보통 함께 부여되지만("co-granted"),
+    // 이름이 맞는 전제를 확인하려면 실제로 스캔에 쓰이는 권한을 검사해야 한다.
+    private val requestMmsPermissionsLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { results ->
+        if (results.values.all { it }) {
+            // 방금 허용됐으니 이어서 스캔을 예약한다.
+            MmsScanWorker.schedule(this, delayMillis = 0)
+        } else {
+            // 거부해도 통화·문자(SMS) 수집 등 기존 기능은 그대로 동작해야 하므로 여기서 막지 않는다.
+            // 다만 조용히 실패하면 원인을 알 도리가 없으므로(카톡 알림 접근 권한과 같은 전례) 로그를 남긴다.
+            Log.w(
+                "MainActivity",
+                "RECEIVE_MMS/READ_SMS 권한 거부됨 — 긴 문자(MMS) 주문 자동 수집이 동작하지 않습니다."
+            )
+        }
+    }
+
+    /** MMS 스캔에 필요한 권한이 모두 있으면 즉시 예약, 없으면 부족한 것만 요청한다. */
+    private fun scheduleMmsScanIfPermitted() {
+        val required = listOf(Manifest.permission.RECEIVE_MMS, Manifest.permission.READ_SMS)
+        val missing = required.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+        if (missing.isEmpty()) {
+            MmsScanWorker.schedule(this, delayMillis = 0)
+        } else {
+            requestMmsPermissionsLauncher.launch(missing.toTypedArray())
+        }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        // 앱이 죽어 있던 동안 온 긴 문자를 따라잡는다(최대 6시간).
+        // 권한이 이미 있으면 기존과 동일하게 즉시 예약, 없으면(재로그인 없이 곧장 여기로 온 경우)
+        // 요청부터 하고 결과가 오면 예약한다.
+        scheduleMmsScanIfPermitted()
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 

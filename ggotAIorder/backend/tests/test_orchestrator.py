@@ -92,3 +92,32 @@ async def test_scheduled_mall_confirm_skips_when_paused(monkeypatch):
     monkeypatch.setattr(orch._mall_confirm, "scan_once", fake_scan)
     await orch._scheduled_mall_confirm()
     assert called["scan"] is False
+
+
+def test_realtime_watchdog_interval_constant_is_30_sec():
+    assert orch_mod._REALTIME_WATCHDOG_INTERVAL_SEC == 30
+
+
+async def test_scheduled_realtime_watchdog_calls_ensure_healthy(monkeypatch):
+    """watchdog 잡은 리스너의 ensure_healthy 를 호출해 wedge 를 복구해야 한다."""
+    orch = Orchestrator()
+    called = {"ensure": False}
+
+    async def fake_ensure():
+        called["ensure"] = True
+
+    monkeypatch.setattr(orch._listener, "ensure_healthy", fake_ensure)
+    await orch._scheduled_realtime_watchdog()
+    assert called["ensure"] is True
+
+
+async def test_scheduled_realtime_watchdog_swallows_exceptions(monkeypatch):
+    """복구 시도가 실패해도 스케줄러가 죽지 않도록 예외를 흡수한다."""
+    orch = Orchestrator()
+
+    async def boom():
+        raise RuntimeError("rebuild failed")
+
+    monkeypatch.setattr(orch._listener, "ensure_healthy", boom)
+    # 예외가 전파되지 않아야 한다.
+    await orch._scheduled_realtime_watchdog()

@@ -35,3 +35,30 @@ describe('getDashboard', () => {
     expect(r).toEqual({ ok: false, reason: 'error' });
   });
 });
+
+describe('보류(hold) 통계', () => {
+  it('rpa_hold 를 stats 로 전달한다', async () => {
+    const stats = { today_total: 5, rpa_success: 2, rpa_fail: 1, rpa_ready: 1, rpa_hold: 3 };
+    const rpc = (async () => ({
+      data: { ok: true, stats, channels: [], config: {}, feed: [], engine_alive: true },
+      error: null,
+    })) as DashRpc;
+
+    const r = await getDashboard(rpc, 7, 'tk');
+
+    expect(r.data?.stats.rpa_hold).toBe(3);
+  });
+
+  it('서버가 rpa_hold 를 안 주면 0 으로 본다', async () => {
+    // 마이그레이션 적용 전 서버와 섞여도 화면이 NaN 을 그리지 않아야 한다.
+    const stats = { today_total: 5, rpa_success: 2, rpa_fail: 1, rpa_ready: 1 };
+    const rpc = (async () => ({
+      data: { ok: true, stats, channels: [], config: {}, feed: [], engine_alive: true },
+      error: null,
+    })) as DashRpc;
+
+    const r = await getDashboard(rpc, 7, 'tk');
+
+    expect(r.data?.stats.rpa_hold).toBe(0);
+  });
+});

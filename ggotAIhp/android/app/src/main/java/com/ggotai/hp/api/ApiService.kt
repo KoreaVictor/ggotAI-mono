@@ -66,6 +66,22 @@ interface ApiService {
         @retrofit2.http.Part audioFile: okhttp3.MultipartBody.Part
     ): Response<UploadCallResponse>
 
+    /**
+     * 카톡·문자 주문 업로드. 오디오가 없어 stt_text(대화 전문)를 그대로 보낸다.
+     * 서버는 STT 없이 바로 Gemini 추출로 넘긴다.
+     */
+    @retrofit2.http.Multipart
+    @retrofit2.http.POST("upload-text")
+    suspend fun uploadText(
+        @retrofit2.http.Part("user_phone_number") userPhoneNumber: okhttp3.RequestBody,
+        @retrofit2.http.Part("phone_number") phoneNumber: okhttp3.RequestBody,
+        @retrofit2.http.Part("customer_name") customerName: okhttp3.RequestBody,
+        @retrofit2.http.Part("call_date") callDate: okhttp3.RequestBody,
+        @retrofit2.http.Part("call_time") callTime: okhttp3.RequestBody,
+        @retrofit2.http.Part("channel_order") channelOrder: okhttp3.RequestBody,
+        @retrofit2.http.Part("stt_text") sttText: okhttp3.RequestBody
+    ): Response<UploadCallResponse>
+
     @retrofit2.http.POST("delete-call")
     suspend fun deleteCall(
         @retrofit2.http.Body request: DeleteCallRequest

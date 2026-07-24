@@ -68,7 +68,7 @@ export function DashboardView() {
     finally { setActionLoading(false); }
   };
 
-  const stats = data?.stats ?? { today_total: 0, rpa_success: 0, rpa_fail: 0, rpa_ready: 0 };
+  const stats = data?.stats ?? { today_total: 0, rpa_success: 0, rpa_fail: 0, rpa_ready: 0, rpa_hold: 0 };
   const running = serviceStatus === 'RUNNING';
   // 수집엔진 시작/중지 제어는 PC(데스크톱 앱)에서만 가능. 웹은 상태 조회 전용.
   const isDesktop = typeof window !== 'undefined' && !!window.electronAPI;
@@ -111,7 +111,7 @@ export function DashboardView() {
       {dataError && <div className="mb-6 text-sm text-brand-error bg-brand-error/10 border border-brand-error/20 rounded-xl px-4 py-3">{dataError}</div>}
 
       {/* 통계 카드 */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 mb-8">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-5 mb-8">
         <div className="glass-panel p-5 rounded-xl border border-brand-border space-y-2">
           <div className="text-xs font-semibold text-brand-text-secondary uppercase tracking-wider">오늘 총 수집</div>
           <div className="flex items-baseline justify-between">
@@ -130,6 +130,11 @@ export function DashboardView() {
         <div className="glass-panel p-5 rounded-xl border border-brand-border space-y-2">
           <div className="text-xs font-semibold text-brand-text-secondary uppercase tracking-wider">RPA 순차 입력 대기</div>
           <div className="text-3xl font-display font-bold text-brand-warning">{stats.rpa_ready} <span className="text-sm font-normal text-brand-text-secondary">건</span></div>
+        </div>
+        {/* 카톡·문자 주문 중 필수값이 비어 자동입력이 멈춘 건. 사장님이 채워야 진행된다. */}
+        <div className="glass-panel p-5 rounded-xl border border-brand-border space-y-2">
+          <div className="text-xs font-semibold text-brand-text-secondary uppercase tracking-wider">확인 필요(내용 보완)</div>
+          <div className="text-3xl font-display font-bold text-brand-warning">{stats.rpa_hold} <span className="text-sm font-normal text-brand-text-secondary">건</span></div>
         </div>
       </div>
 

@@ -41,6 +41,10 @@ _MALL_CONFIRM_INTERVAL_MIN = 5
 # 하트비트 주기(초). 상황판은 최근 90초 내 신호로 '가동중'을 판정한다(get_dashboard).
 _HEARTBEAT_INTERVAL_SEC = 20
 
+# realtime 연결 watchdog 주기(초). realtime-py 가 서버발 1001 후 자가복구를 못 해
+# 소켓이 죽은 채 남는 wedge 를 감지·재구독하기 위한 주기(하트비트 25초보다 촘촘히).
+_REALTIME_WATCHDOG_INTERVAL_SEC = 30
+
 
 class Orchestrator:
     """모든 백엔드 서브시스템의 수명주기를 관리한다."""
@@ -118,6 +122,17 @@ class Orchestrator:
         except Exception:
             logger.exception("발주확인 스캔 실패(다음 주기에 재시도)")
 
+    async def _scheduled_realtime_watchdog(self) -> None:
+        """realtime 연결이 wedge 면 재구독한다(paused 와 무관 — 연결 유지가 기준).
+
+        realtime-py 2.5.3 은 서버발 1001(going away)에 재연결을 못 걸어, 재시작 전까지
+        실시간 처리가 죽고 catch-up 안전망만 남는다(2026-07-23 실측 14시간 wedge).
+        """
+        try:
+            await self._listener.ensure_healthy()
+        except Exception:
+            logger.exception("realtime watchdog 실패(다음 주기에 재시도)")
+
     async def _heartbeat(self) -> None:
         """수집엔진 생존 신호를 기록한다(paused 와 무관 — 프로세스 생존이 기준)."""
         if self._shop_key is None:
@@ -183,6 +198,15 @@ class Orchestrator:
             "interval",
             minutes=_MALL_CONFIRM_INTERVAL_MIN,
             id="mall_confirm",
+            max_instances=1,
+            coalesce=True,
+        )
+        # realtime watchdog: 연결 wedge 를 주기적으로 감지·재구독(실시간 처리 되살림).
+        self._scheduler.add_job(
+            self._scheduled_realtime_watchdog,
+            "interval",
+            seconds=_REALTIME_WATCHDOG_INTERVAL_SEC,
+            id="realtime_watchdog",
             max_instances=1,
             coalesce=True,
         )

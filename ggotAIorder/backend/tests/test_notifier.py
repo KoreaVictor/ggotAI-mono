@@ -37,6 +37,7 @@ def _settings(**kw):
         rpa_manual_message="{channel} 주문 {count}건 접수 - 수동입력 필요",
         rpa_fail_message="[경고] {channel} 주문 입력 실패",
         fallback_mobile="010-9999-0000",
+        rpa_hold_message="{channel} 주문 {count}건 확인 필요 - 내용을 채워주세요",
     )
     base.update(kw)
     return NotificationSettings(**base)
@@ -179,3 +180,26 @@ async def test_freetext_provider_ignores_missing_template_code(monkeypatch):
     assert result is True
     assert provider.sent == [("010-1111-2222", "가게전화 주문 1건 입력 완료")]
     assert provider.calls[0]["template_code"] is None
+
+
+async def test_hold_uses_hold_message_not_fail_warning():
+    """보류(hold)는 오류가 아니라 '확인 필요' 안내다 — 실패 경고 문구가 가면 안 된다."""
+    repo = FakeRepo(_settings())
+    provider = FakeProvider()
+
+    result = await send(2, "문자", 1, "hold", repo=repo, provider=provider)
+
+    assert result is True
+    to, text = provider.sent[0]
+    assert text == "문자 주문 1건 확인 필요 - 내용을 채워주세요"
+
+
+async def test_unknown_outcome_still_falls_back_to_fail_message():
+    """알 수 없는 outcome 은 기존대로 실패 문구로 보수적 폴백."""
+    repo = FakeRepo(_settings())
+    provider = FakeProvider()
+
+    await send(2, "핸드폰", 1, "weird", repo=repo, provider=provider)
+
+    _, text = provider.sent[0]
+    assert text == "[경고] 핸드폰 주문 입력 실패"

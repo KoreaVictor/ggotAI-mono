@@ -30,6 +30,14 @@ def test_build_payload_defaults_and_status():
     assert p["rpa_status"] == "ready"
 
 
+def test_build_payload_accepts_explicit_rpa_status():
+    """카톡·문자 보류 건은 'hold'로 INSERT 된다(기본값은 'ready' 유지)."""
+    p = build_order_payload(
+        _row(), OrderExtraction(product_name="장미", price=30000), rpa_status="hold"
+    )
+    assert p["rpa_status"] == "hold"
+
+
 def test_engine_aliases_still_exist():
     # 하위호환: 기존 테스트가 참조하는 engine 심볼이 살아있어야 한다.
     from ggotaiorder.pipeline import engine

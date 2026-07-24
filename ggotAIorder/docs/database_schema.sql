@@ -23,7 +23,7 @@ CREATE TABLE IF NOT EXISTS member_info (
 -- 2. server_call_history (기존 테이블 수정 / 비정형 주문 채널별 수집 이력 테이블)
 CREATE TABLE IF NOT EXISTS server_call_history (
     id SERIAL PRIMARY KEY,                         -- 고유 ID (자동 증가)
-    channel_order VARCHAR(20) DEFAULT '기타',      -- 주문 수집 채널 ('핸드폰', '가게전화', '쇼핑몰', '인터라넷', '가게음성', '기타')
+    channel_order VARCHAR(20) DEFAULT '기타',      -- 주문 수집 채널 ('핸드폰', '가게전화', '쇼핑몰', '인터라넷', '가게음성', '카톡', '문자', '기타')
     channel_classification VARCHAR(255) NOT NULL, -- 채널별 상세 정보 (전화번호, 쇼핑몰 주소, 인트라넷 주소 등)
     shop_key INT NOT NULL,                         -- 꽃가게 고유 KEY (member_info 테이블의 id와 매핑)
     shop_name VARCHAR(50) NOT NULL,                -- 꽃가게 이름
@@ -61,7 +61,7 @@ CREATE TABLE IF NOT EXISTS order_details (
     ribbon_congratulations TEXT,                   -- 리본문구_경조사어
     card_message TEXT,                             -- 카드메세지 내용
     sang_divi VARCHAR(20) DEFAULT NULL,            -- AI 추출 상품분류(FlowerNT sang_divi 옵션). 미상 시 NULL → RPA가 상품명 키워드로 폴백
-    rpa_status VARCHAR(20) DEFAULT 'ready',        -- RPA 처리 상태 ('ready', 'success', 'manual'=미구동→백업/수동입력, 'fail')
+    rpa_status VARCHAR(20) DEFAULT 'ready',        -- RPA 처리 상태 ('ready', 'success', 'manual'=미구동→백업/수동입력, 'fail', 'hold'=필수값 누락·사장님 보완 대기)
     rpa_attempts INTEGER NOT NULL DEFAULT 0,       -- manual 자동재시도 횟수(상한 retry.RPA_MAX_ATTEMPTS 초과 시 수동입력으로 남김)
     created_at TIMESTAMP WITH TIME ZONE DEFAULT TIMEZONE('utc'::text, NOW()),
     FOREIGN KEY (call_history_id) REFERENCES server_call_history(id) ON DELETE CASCADE
@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS setting_info (
     notification_phone_number VARCHAR(20) DEFAULT NULL,  -- 알림을 수신할 사장님 핸드폰 번호 (NULL일 경우 member_info의 mobile_number 조회)
     rpa_success_message TEXT DEFAULT '{channel} 주문 {count}건 꽃가게 관리 프로그램에 입력 완료했습니다.', -- 성공 알림 문구
     rpa_manual_message TEXT DEFAULT '[ggotAI] {channel} 주문 {count}건 접수 — 관리 프로그램에 직접 입력해 주세요.', -- 백업(수동입력 필요) 안내 문구
+    rpa_hold_message TEXT DEFAULT '[ggotAI] {channel} 주문 {count}건 확인 필요 — ggotAIya에서 내용을 채워주세요.', -- 필수값 누락(보류) 안내 문구
     rpa_fail_message TEXT DEFAULT '[ggotAI 경고] {channel} 주문 자동 입력 실패! 수동 확인 바랍니다.', -- 실패 경고 알림 문구
     order_hp_1 VARCHAR(20) NOT NULL,                     -- 주문핸드폰1 (자동로그인용 기기 식별)
     order_hp_2 VARCHAR(20) DEFAULT NULL,                 -- 주문핸드폰2

@@ -194,3 +194,21 @@ lookup 이 필요하지만 채우기에는 지장 없다. → `PRODUCT_DIRECT_TY
 - ~~금액·총합계금액이 0~~ → **§10 에서 해결**(상품코드를 채우니 계산됨).
 - ~~상품코드가 빈 값~~ → **§10 에서 해결**.
 - 저장 버튼은 UIA 에 없어 좌표 클릭이다. 취소 버튼 좌표 클릭은 라이브에서 동작 확인함.
+
+## 11. Task 6·7 완료 (2026-07-24) — 배선 + 종단 E2E
+
+- **Task 6(배선)**: factory 의 roseweb 분기를 실제 `RoseWebAutomator` 로 교체(auto_submit 전달,
+  기본 N), adapters 스텁 제거. `uiautomation` 은 automator 안에서 호출 시점 import 라 factory
+  최상단 import 는 안전 — factory 가 그걸 모듈 레벨로 안 끌어오는지 ast 테스트로 고정.
+- **Task 7(E2E)**: 실제 `enqueue` 흐름 + 실제 `RoseWebAutomator` 로 관통 확인. **계획서 Step 1 의
+  "setting_info 를 roseweb 으로 바꾼다"는 하지 않았다** — shop 19 는 운영 중인 FlowerNT
+  (enabled=Y·auto_submit=Y) 라 바꾸면 운영이 죽는다. 대신 automator 를 주입해 enqueue→input_order
+  관통을 봤다(factory→build 경로는 Task 6 에서 검증).
+  - 성공 경로: `근조화환 3단` → 검색어 `근조3단화환` 변환 → 13필드 채우기 → **success**, 백업 없음.
+  - 백업 폴백: **⚠️ 계획서 Step 2 와 실제 동작이 다르다.** 계획서는 "RoseWeb 종료 상태 → False"를
+    가정하나, `RoseWebAutomator.is_program_running()` 은 미기동이면 **자동 실행**한다. 그래서
+    "종료 → 백업"은 일어나지 않는다. RoseWeb 의 manual 폴백은 (a) 폼이 이미 열려 있음(사장님
+    작업 중) (b) 기동 실패 (c) uiautomation 미설치 (d) 예외에서 발생한다. 라이브로 (a) 를
+    시연 → **manual + 백업 2개(.xlsx/.txt)**. (c) 는 §11 Task 6(uiautomation 차단 환경)에서 확인.
+  - 백엔드 346 passed.
+- **▶ 남은 것 = 저장(auto_submit=Y) 검증(사장님 입회).** 유일 미해결 = '배달일자를 확인하세요'.

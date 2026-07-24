@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
-from ggotaiorder.rpa.adapters import ManualOnlyAutomator, RoseWebAutomator
+from ggotaiorder.rpa.adapters import ManualOnlyAutomator
 from ggotaiorder.rpa.automator import ProgramAutomator
 from ggotaiorder.rpa.flowernt3.automator import FlowerNt3Automator
 from ggotaiorder.rpa.program_settings import RpaProgramSettings
+from ggotaiorder.rpa.roseweb.automator import RoseWebAutomator
 
 
 def build_automator(
@@ -28,8 +29,7 @@ def build_automator(
             chrome_path=chrome_path,
         )
     if settings.program_type == "roseweb":
-        return RoseWebAutomator(
-            url=settings.url, login_id=settings.login_id,
-            login_password=settings.login_password, debug_port=debug_port,
-        )
+        # debug_port/profile_dir/chrome_path 는 브라우저용이라 RoseWeb 은 안 쓴다.
+        # RoseWeb 은 실행 시 자동 로그인이라 자격증명도 쓰지 않는다.
+        return RoseWebAutomator(auto_submit=settings.auto_submit)
     return ManualOnlyAutomator()

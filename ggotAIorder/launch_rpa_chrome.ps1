@@ -15,6 +15,28 @@ $debugPort   = 9222
 $landingUrl  = "https://www.flowernt.com/main.asp?checkintro=Y"
 
 try {
+    # This Chrome exists only for FlowerNT (CDP automation). Shops on RoseWeb or
+    # any other program do not need it - launching it there just puts a stray
+    # window on the owner's screen every logon. Ask the backend which program
+    # this shop uses; "unknown" (DB unreachable AND no cached answer) launches
+    # anyway, keeping the behaviour existing installs already have.
+    $programType = 'unknown'
+    $typeScript  = Join-Path $PSScriptRoot 'backend\scripts\rpa_program_type.py'
+    $python      = Resolve-Python
+    if ($python -and (Test-Path $typeScript)) {
+        try {
+            $out = & $python $typeScript
+            if ($LASTEXITCODE -eq 0 -and $out) { $programType = ([string]$out).Trim() }
+        } catch {
+            Write-Host ("WARN: program type lookup failed - assuming unknown. {0}" -f $_.Exception.Message) -ForegroundColor Yellow
+        }
+    }
+
+    if ($programType -ne 'flowernt' -and $programType -ne 'unknown') {
+        Write-Host ("Shop program is '{0}' - FlowerNT Chrome not needed, skip launch." -f $programType) -ForegroundColor Yellow
+        exit 0
+    }
+
     if (-not $chrome) { throw "chrome.exe not found (App Paths / Program Files / LocalAppData)." }
     if (-not (Test-Path $profileDir)) { New-Item -ItemType Directory -Force -Path $profileDir | Out-Null }
 

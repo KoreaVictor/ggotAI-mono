@@ -10,9 +10,22 @@ backend\.venv\Scripts\python.exe -m pip install -r backend/requirements.txt
 backend\.venv\Scripts\python.exe -m pip install -e backend
 ```
 
+### 관리 프로그램별 자동입력(RPA) 의존성
+
+꽃집이 쓰는 주문관리 프로그램에 맞는 extra만 설치한다. 안 쓰는 쪽은 설치하지 않는다
+(설치돼 있지 않아도 수집엔진은 정상 기동하며, 해당 주문은 백업(manual) 경로로 흐른다).
+
+```powershell
+# FlowerNT(웹) 쓰는 가게
+backend\.venv\Scripts\python.exe -m pip install -e "backend[flowernt]"
+backend\.venv\Scripts\python.exe -m playwright install chromium
+
+# RoseWeb(데스크톱 앱) 쓰는 가게
+backend\.venv\Scripts\python.exe -m pip install -e "backend[roseweb]"
+```
+
 후속 세션에서 필요 시:
 ```powershell
-backend\.venv\Scripts\python.exe -m playwright install chromium
 backend\.venv\Scripts\python.exe backend\.venv\Scripts\pywin32_postinstall.py -install
 ```
 
@@ -96,6 +109,26 @@ enqueue 오케스트레이션·백업은 구현·오프라인 테스트되었으
 3. `WindowsProgramAutomator.input_order` 클립보드(pyperclip)+키 시퀀스 입력 구현.
 4. (선택) `.env`에 `RPA_BACKUP_DIR` 설정 — 기본값은 `backend/backups`.
 5. enqueue 실행 → 구동 시 자동 입력·`rpa_status='success'`·성공 알림 / 미구동·입력실패 시 백업(.xlsx+.txt)·`'fail'`·경고 알림 확인.
+
+### RoseWeb(화원박사) 가게 온보딩 체크리스트
+
+RoseWeb 자동입력은 그 PC 의 실측값(폼 좌표·상품 마스터)에 묶여 있다. 새 가게를 붙이거나
+프로그램이 업데이트되면 아래를 반드시 다시 맞춘다. 실측 방법은
+`docs/superpowers/specs/2026-07-23-roseweb-spike-findings.md` 참조.
+
+1. **상품 마스터 재확인 — 가장 중요.** `rpa/roseweb/product.py` 의 `MASTER_TERMS`·키워드 규칙은
+   **가게마다 다르고**, 현재 값은 shop 19(테스트꽃집) 실측이다. ⚠️ 마스터에 **없는** 이름으로
+   검색한 뒤 '선택'을 누르면 RoseWeb 이 크래시한다(Access violation, 재시작 필요). 코드로는
+   이걸 막을 수 없다 — 크래시가 클릭 순간 나기 때문이다. 그래서 `product.py` 가 내놓는 검색어가
+   전부 그 가게 **실제** 마스터에 있는지 사람이 대조해야 한다(자동 테스트는 규칙 출력이
+   `MASTER_TERMS` 안에 있는지만 보장하지, `MASTER_TERMS` 가 라이브와 맞는지는 모른다).
+2. **폼 좌표 재측정.** `rpa/roseweb/layout.py` 는 폼 크기 1076x854 기준 실측이다. 창 크기/버전이
+   다르면 `roseweb_inspect.py dump` 로 다시 뜬다(automator 가 폼 크기가 다르면 채우기를 거부한다).
+3. **채우기(auto_submit=N)부터.** `setting_info` 에 `rpa_program_type='roseweb'`·`rpa_enabled='Y'`·
+   `rpa_auto_submit='N'`. 실주문 몇 건이 정확히 채워지는지 사장님이 눈으로 확인.
+4. **auto_submit=Y 전환**은 채우기 검증이 쌓인 뒤 사장님 결정(FlowerNT 관례). 전환 전
+   `_save_confirm_timeout`(기본 30초)이 그 PC 에 충분한지 확인 — 저장 후 폼이 닫히는 데 그보다
+   오래 걸리면 실제 등록된 주문을 fail 로 오판해 중복이 생긴다.
 
 ## 구조
 

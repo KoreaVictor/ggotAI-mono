@@ -12,11 +12,26 @@ function Get-GgotRoot     { return $script:GgotRoot }
 
 function Resolve-Pythonw {
     <#
-      pythonw.exe 를 찾는다. 우선순위:
-        1) py 런처가 알려주는 python.exe 의 형제 pythonw.exe
-        2) PATH 의 python.exe 의 형제
+      pythonw.exe 를 찾는다(콘솔 없는 상주 실행용).
+      후보 탐색은 Get-PythonCandidates 가 담당한다.
+    #>
+    return (Resolve-PythonExe -LeafName 'pythonw.exe')
+}
+
+function Resolve-Python {
+    <#
+      python.exe 를 찾는다. 출력을 받아와야 하는 짧은 스크립트 실행용
+      (pythonw.exe 는 콘솔이 없어 표준출력을 캡처할 수 없다).
+    #>
+    return (Resolve-PythonExe -LeafName 'python.exe')
+}
+
+function Get-PythonCandidates {
+    <#
+      python.exe 후보 경로들. 우선순위:
+        1) py 런처가 알려주는 python.exe
+        2) PATH 의 python.exe
         3) 표준 설치 위치(전체 사용자 / 사용자별) 글롭
-      Microsoft Store 별칭(WindowsApps 아래 0바이트 스텁)은 제외한다.
     #>
     $candidates = @()
 
@@ -41,11 +56,21 @@ function Resolve-Pythonw {
         foreach ($h in $hits) { $candidates += $h.FullName }
     }
 
-    foreach ($c in $candidates) {
+    return $candidates
+}
+
+function Resolve-PythonExe {
+    <#
+      후보 python.exe 들의 폴더에서 원하는 실행파일(python.exe / pythonw.exe)을 찾는다.
+      Microsoft Store 별칭(WindowsApps 아래 0바이트 스텁)은 제외한다.
+    #>
+    param([Parameter(Mandatory=$true)][string]$LeafName)
+
+    foreach ($c in (Get-PythonCandidates)) {
         if ([string]::IsNullOrWhiteSpace($c)) { continue }
         if ($c -like '*\WindowsApps\*') { continue }   # Store alias stub
-        $w = Join-Path (Split-Path $c -Parent) 'pythonw.exe'
-        if (Test-Path $w) { return $w }
+        $exe = Join-Path (Split-Path $c -Parent) $LeafName
+        if (Test-Path $exe) { return $exe }
     }
     return $null
 }

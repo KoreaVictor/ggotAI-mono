@@ -452,12 +452,61 @@ def test_open_new_order_refuses_when_a_form_is_already_open(monkeypatch):
         a._open_new_order()
 
 
+def test_save_succeeds_when_form_closes(monkeypatch):
+    fake = _FakeUia()
+    monkeypatch.setattr("ggotaiorder.rpa.roseweb.automator._uia", lambda: fake)
+    a = _automator()
+    monkeypatch.setattr(a, "_blocking_dialog", lambda: None)
+    monkeypatch.setattr(a, "_find_window", lambda cls: None)   # 폼 닫힘
+    a._save(_Form())   # 예외 없이 반환하면 성공
+
+
+def test_save_raises_when_dialog_blocks(monkeypatch):
+    """저장 후 검증 대화상자가 뜨면 등록이 막힌 것 — success 로 오보하면 안 된다."""
+    fake = _FakeUia()
+    monkeypatch.setattr("ggotaiorder.rpa.roseweb.automator._uia", lambda: fake)
+    a = _automator()
+    dialog = _Dialog("화원박사-ROSEWeb", ["확인"])
+    monkeypatch.setattr(a, "_blocking_dialog", lambda: dialog)
+
+    with pytest.raises(RuntimeError, match="저장 거부"):
+        a._save(_Form())
+    assert dialog.buttons[0].clicked is True   # 안내창은 닫아준다
+
+
+def test_save_raises_when_form_stays_open(monkeypatch):
+    """대화상자도 없는데 폼이 안 닫히면 저장이 확정되지 않은 것이다."""
+    fake = _FakeUia()
+    monkeypatch.setattr("ggotaiorder.rpa.roseweb.automator._uia", lambda: fake)
+    a = _automator()
+    monkeypatch.setattr(a, "_blocking_dialog", lambda: None)
+    monkeypatch.setattr(a, "_find_window", lambda cls: object())   # 폼 계속 있음
+    monkeypatch.setattr("time.monotonic", _fake_clock())
+
+    with pytest.raises(RuntimeError, match="저장 미확정"):
+        a._save(_Form())
+
+
+def _fake_clock():
+    """time.monotonic 을 빨리 감아 대기 루프가 즉시 끝나게 한다."""
+    t = [0.0]
+
+    def clock():
+        t[0] += 5.0
+        return t[0]
+
+    return clock
+
+
 class _FakeUia:
-    """SendKeys/클립보드 호출을 순서대로 기록하는 가짜 uiautomation."""
+    """SendKeys/클립보드/클릭 호출을 순서대로 기록하는 가짜 uiautomation."""
 
     def __init__(self, clipboard="사장님이 복사해둔 것"):
         self.calls = []
         self.clipboard = clipboard
+
+    def Click(self, x, y):
+        self.calls.append(("click", x, y))
 
     def SendKeys(self, text, waitTime=None):
         self.calls.append(("keys", text))

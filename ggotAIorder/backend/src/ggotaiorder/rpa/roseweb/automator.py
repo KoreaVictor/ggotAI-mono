@@ -195,12 +195,32 @@ class RoseWebAutomator:
         auto.SendKeys("{Tab}", waitTime=self._key_wait)
 
     def _save(self, form) -> None:
-        """'저장' 버튼 클릭. 버튼이 UIA 에 안 보여 좌표로 누른다(layout 참조)."""
+        """'저장' 버튼을 누르고 실제로 저장됐는지 확인한다.
+
+        버튼이 UIA 에 안 보여 좌표로 누른다(layout 참조). 저장이 성공하면 주문폼이
+        닫힌다(실측). 그래서 **폼이 닫혔는지로 성공을 판정**한다 — 클릭만 하고 넘어가면,
+        어떤 주문에서 저장 후 검증 대화상자가 떠 등록이 막혀도 'success' 로 잘못
+        보고하게 된다(사장님은 안 들어간 주문을 성공으로 안다).
+        """
         auto = _uia()
         r = form.BoundingRectangle
         x, y = layout.SAVE_BUTTON_POS
         logger.info("RoseWeb 저장 클릭 (%s,%s)", r.left + x, r.top + y)
         auto.Click(r.left + x, r.top + y)
+
+        # 저장 후 검증 대화상자(TMessageForm)가 뜨면 등록이 막힌 것이다.
+        deadline = time.monotonic() + 8.0
+        while time.monotonic() < deadline:
+            time.sleep(0.5)
+            dlg = self._blocking_dialog()
+            if dlg is not None:
+                desc = self._describe_dialog(dlg)
+                self._dismiss_dialog(dlg)
+                raise RuntimeError(f"RoseWeb 저장 거부 — 대화상자: {desc}")
+            if self._find_window(layout.FORM_CLASS) is None:
+                logger.info("RoseWeb 저장 완료(폼 닫힘)")
+                return
+        raise RuntimeError("RoseWeb 저장 후 폼이 닫히지 않음 — 저장 미확정")
 
     # --- ProgramAutomator 계약 -------------------------------------------
     def is_program_running(self) -> bool:

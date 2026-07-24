@@ -27,12 +27,15 @@ class FakeRepo:
 
 
 class FakeAutomator:
-    def __init__(self, running, raises=False):
+    def __init__(self, running, raises=False, probe_raises=None):
         self._running = running
         self._raises = raises
+        self._probe_raises = probe_raises
         self.inputs = []
 
     def is_program_running(self):
+        if self._probe_raises is not None:
+            raise self._probe_raises
         return self._running
 
     def input_order(self, order):
@@ -89,6 +92,27 @@ async def test_program_running_input_fails_backs_up_as_fail():
 async def test_program_not_running_backs_up_as_manual():
     repo = FakeRepo(_order())
     autom = FakeAutomator(running=False)
+    backup = FakeBackup()
+    calls, notify = _spy_notify()
+
+    await enqueue(7, repo=repo, automator=autom, backup=backup, notify=notify)
+
+    assert autom.inputs == []
+    assert backup.written == [7]
+    assert repo.statuses == [(7, "manual")]
+    assert calls == [(7, "manual")]
+
+
+async def test_program_probe_raises_backs_up_as_manual():
+    """구동 확인 자체가 터져도 백업·상태·알림은 남아야 한다.
+
+    프로그램별 어댑터는 무거운 선택적 의존성(FlowerNT=Playwright, RoseWeb=uiautomation)을
+    호출 시점에 import한다. 그게 없거나 깨져 있으면 is_program_running 이 ImportError 를
+    던지는데, 이때 그냥 빠져나가면 백업도 상태도 알림도 없이 주문이 조용히 사라진다
+    (재시도 스캐너는 'manual' 만 줍는다).
+    """
+    repo = FakeRepo(_order())
+    autom = FakeAutomator(running=True, probe_raises=ImportError("no playwright"))
     backup = FakeBackup()
     calls, notify = _spy_notify()
 

@@ -76,7 +76,20 @@ async def enqueue(
                 logger.warning("RPA 대상 주문 없음 id=%s", order_detail_id)
                 return
 
-            if await asyncio.to_thread(automator.is_program_running):
+            # 구동 확인이 터지는 경우(어댑터의 선택적 의존성 미설치·CDP 오류 등)도
+            # 미구동과 똑같이 다룬다. 여기서 예외가 새어 나가면 바깥 except로 빠져
+            # 백업·rpa_status·알림이 전부 없이 주문이 조용히 사라진다(재시도 스캐너는
+            # 'manual'만 줍기 때문에 아무도 다시 보지 않는다).
+            try:
+                running = await asyncio.to_thread(automator.is_program_running)
+            except Exception:
+                logger.exception(
+                    "관리 프로그램 구동 확인 실패 — 미구동(manual)으로 처리 id=%s",
+                    order_detail_id,
+                )
+                running = False
+
+            if running:
                 try:
                     await asyncio.to_thread(automator.input_order, order)
                     outcome = OUTCOME_SUCCESS

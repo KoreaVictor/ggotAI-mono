@@ -6,8 +6,7 @@
 
 from __future__ import annotations
 
-import re
-
+from ggotaiorder.rpa import format as _fmt
 from ggotaiorder.rpa.models import RpaOrder
 
 # channel(server_call_history.channel_order) → FlowerNT3 주문구분(order_divi) value.
@@ -86,31 +85,10 @@ def product_to_sang_divi(product_name: str | None) -> str:
     return DEFAULT_SANG_DIVI
 
 
-def normalize_price(price: object) -> str:
-    """숫자만 남긴 문자열. None/빈값은 ''. float는 자릿수 붕괴를 막으려 int로 절삭."""
-    if price is None:
-        return ""
-    if isinstance(price, float):
-        price = int(price)
-    return re.sub(r"[^0-9]", "", str(price))
-
-
-def split_delivery_datetime(delivery_at: str | None) -> tuple[str, str]:
-    """ISO/공백구분 일시를 (YYYY-MM-DD, HH:MM)로 분리. 시각 없으면 ('date','').
-
-    타임존 접미사(+09:00)는 폼이 현지시각 기준이라 버린다. 시·분이 비면 시각은 ''.
-    """
-    if not delivery_at:
-        return ("", "")
-    s = str(delivery_at).strip().replace("T", " ")
-    parts = s.split(" ", 1)
-    date = parts[0]
-    time = ""
-    if len(parts) > 1 and parts[1].strip():
-        hm = parts[1].strip().split(":")
-        if len(hm) >= 2 and hm[0].strip() and hm[1].strip():
-            time = f"{hm[0].zfill(2)}:{hm[1].zfill(2)}"
-    return (date, time)
+# 가격·일시 포맷은 프로그램과 무관해 rpa.format 으로 옮겼다(RoseWeb 등과 공유).
+# 기존 호출부(테스트 포함)를 위해 이름은 여기서도 그대로 노출한다.
+normalize_price = _fmt.normalize_price
+split_delivery_datetime = _fmt.split_delivery_datetime
 
 
 def order_to_fields(order: RpaOrder) -> dict[str, str]:

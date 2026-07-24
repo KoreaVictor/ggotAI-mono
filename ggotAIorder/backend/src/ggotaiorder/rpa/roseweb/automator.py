@@ -17,7 +17,7 @@ import subprocess
 import time
 
 from ggotaiorder.rpa.models import RpaOrder
-from ggotaiorder.rpa.roseweb import keys, layout, locator, mapping
+from ggotaiorder.rpa.roseweb import keys, layout, locator, mapping, product
 
 logger = logging.getLogger(__name__)
 
@@ -51,6 +51,7 @@ class RoseWebAutomator:
         self._ui_pause = 0.4
         self._key_wait = 0.03
         self._clip_pause = 0.15   # 클립보드 반영 대기
+        self._lookup_pause = 1.2  # 팝업 검색·선택 반영 대기(DB 조회라 느리다)
 
     # --- 창 찾기 --------------------------------------------------------
     def _find_window(self, class_name: str):
@@ -259,6 +260,20 @@ class RoseWebAutomator:
         # 말없이 날리지 않도록 끝나면 되돌린다.
         clipboard_backup = self._read_clipboard()
         try:
+            # 상품코드부터. 코드가 없으면 그 행은 주문으로 성립하지 않아(금액 미계산·
+            # 주문자료수 제외) 나머지를 채워봐야 소용없다. 코드를 고르면 상품명 칸에는
+            # 마스터 이름이 들어오는데, 뒤이어 targets 의 product_name 이 원문으로 덮는다.
+            product_name = values.get("product_name")
+            if product_name:
+                code_cell = locator.nearest_edit(
+                    edits, layout.PRODUCT_CODE_POS[0], layout.PRODUCT_CODE_POS[1],
+                    rect.left, rect.top,
+                )
+                if code_cell is None:
+                    raise RuntimeError("RoseWeb 상품코드 칸 미검출")
+                self._pick_product_code(code_cell, product_name)
+                self._abort_on_dialog("상품코드 선택")
+
             for key, ctrl, value in targets:
                 self._type(ctrl, value, multiline=key in _MULTILINE_FIELDS)
                 # 대화상자가 뜨면 폼이 비활성이라 이후 입력이 전부 사라진다.
@@ -272,6 +287,111 @@ class RoseWebAutomator:
             self._save(form)
         else:
             logger.info("RoseWeb auto_submit=N — 채우기만 하고 저장하지 않는다")
+
+    # --- 상품코드 선택 ---------------------------------------------------
+    def _open_product_lookup(self, code_cell):
+        """상품코드 칸에서 {F2} 로 상품코드선택 팝업을 연다."""
+        auto = _uia()
+        code_cell.SetFocus()
+        time.sleep(self._ui_pause)
+        auto.SendKeys(layout.OPEN_PRODUCT_LOOKUP_KEY, waitTime=self._key_wait)
+        popup = self._wait_window(layout.LOOKUP_CLASS, timeout_s=10.0, poll_s=0.4)
+        if popup is None:
+            raise RuntimeError(f"RoseWeb 상품코드선택 팝업({layout.LOOKUP_CLASS}) 미검출")
+        return popup
+
+    def _search_and_pick(self, popup, term: str) -> bool:
+        """팝업에서 term 으로 검색하고 '선택'을 누른다. 골라졌으면 True.
+
+        결과가 없으면 '선택'을 눌러도 아무 일이 없고 팝업이 그대로 남는다(실측).
+        그것으로 성공·실패를 가른다 — 목록의 행은 UIA 에 안 보여 직접 확인할 수 없다.
+        """
+        auto = _uia()
+        rect = popup.BoundingRectangle
+        search_box = self._lookup_search_box(popup)
+        search_box.SetFocus()
+        time.sleep(self._ui_pause)
+        auto.SendKeys("{Ctrl}a", waitTime=self._key_wait)
+        auto.SetClipboardText(keys.prepare(term))
+        time.sleep(self._clip_pause)
+        auto.SendKeys("{Ctrl}v", waitTime=self._key_wait)
+        time.sleep(self._ui_pause)
+
+        auto.Click(rect.left + layout.LOOKUP_SEARCH_BUTTON_POS[0],
+                   rect.top + layout.LOOKUP_SEARCH_BUTTON_POS[1])
+        time.sleep(self._lookup_pause)
+        auto.Click(rect.left + layout.LOOKUP_PICK_BUTTON_POS[0],
+                   rect.top + layout.LOOKUP_PICK_BUTTON_POS[1])
+        time.sleep(self._lookup_pause)
+        return self._find_window(layout.LOOKUP_CLASS) is None
+
+    def _lookup_search_box(self, popup):
+        """팝업의 검색 입력칸(콤보 안 Edit). 폼과 같이 좌표로 찾는다.
+
+        '마지막으로 발견된 Edit' 같은 순서 의존은 못 쓴다 — 검색을 한 번 하고 나면
+        목록 그리드가 편집 컨트롤을 더 노출해 순서가 바뀐다(실측: 두 번째 검색에서
+        검색칸을 못 찾았다).
+        """
+        found = []
+
+        def walk(ctrl, depth=0):
+            if depth > 6:
+                return
+            for child in ctrl.GetChildren():
+                try:
+                    if child.ControlTypeName in ("EditControl", "ComboBoxControl"):
+                        found.append(child)
+                    walk(child, depth + 1)
+                except Exception:
+                    continue
+
+        # 검색 직후에는 팝업이 잠깐 재구성돼 자식이 안 잡히는 순간이 있다(실측: 두 번째
+        # 검색에서 미검출). 잠시 뒤 다시 보면 멀쩡하므로 몇 번 재시도한다.
+        for attempt in range(5):
+            found.clear()
+            walk(popup)
+            rect = popup.BoundingRectangle
+            box = locator.nearest_edit(found, layout.LOOKUP_SEARCH_BOX_POS[0],
+                                       layout.LOOKUP_SEARCH_BOX_POS[1], rect.left, rect.top)
+            if box is not None:
+                return box
+            time.sleep(self._ui_pause)
+        raise RuntimeError("RoseWeb 상품 검색칸 미검출")
+
+    def _close_product_lookup(self, popup) -> None:
+        auto = _uia()
+        rect = popup.BoundingRectangle
+        auto.Click(rect.left + layout.LOOKUP_CANCEL_BUTTON_POS[0],
+                   rect.top + layout.LOOKUP_CANCEL_BUTTON_POS[1])
+        time.sleep(self._lookup_pause)
+
+    def _pick_product_code(self, code_cell, product_name: str) -> None:
+        """상품명을 마스터 이름으로 바꿔 검색·선택해 상품코드를 채운다.
+
+        상품코드가 비면 그 행은 주문으로 성립하지 않는다 — 금액·총합계금액이 계산되지
+        않고 '주문자료수'에도 안 잡힌다(사장님 실측). 그래서 코드는 반드시 있어야 한다.
+
+        ⚠️ **검색은 단 한 번만 한다.** 마스터에 없는 말로 검색한 뒤 '선택'을 누르면
+        RoseWeb 이 죽고(`Access violation at address 00000000`) 그 뒤로는 팝업을 닫아도
+        오류창이 따라붙는다(실측). 결과 목록은 UIA 에 안 보여 누르기 전에 확인할 수도
+        없다. 그래서 `product.resolve_search_term` 이 **마스터에 있는 이름만** 내놓고,
+        그래도 실패하면 재시도하지 않고 그만둔다(→ 백업/수동입력).
+        """
+        term = product.resolve_search_term(product_name)
+        if term != product_name:
+            logger.info("RoseWeb 상품 검색어 변환: %r → %r", product_name, term)
+
+        popup = self._open_product_lookup(code_cell)
+        if self._search_and_pick(popup, term):
+            return
+
+        # 여기 오면 마스터가 실측과 달라진 것이다(꽃집마다 다르다). 다른 말로 또
+        # 눌러보면 프로그램을 죽이므로 그냥 닫고 물러난다.
+        self._close_product_lookup(popup)
+        raise RuntimeError(
+            f"RoseWeb 상품코드를 고르지 못했다(상품명 {product_name!r} → 검색어 {term!r}) "
+            "— 상품 마스터가 바뀌었는지 확인 필요"
+        )
 
     # --- 대화상자 -------------------------------------------------------
     def _blocking_dialog(self):

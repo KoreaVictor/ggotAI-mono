@@ -189,6 +189,11 @@ class _Form:
             for k, (dx, dy) in layout.FIELD_POSITIONS.items()
             if k not in drop
         ]
+        if "product_code" not in drop:
+            self.cells.append(
+                _Cell("product_code", ox + layout.PRODUCT_CODE_POS[0],
+                      oy + layout.PRODUCT_CODE_POS[1])
+            )
 
 
 def _order(**kw):
@@ -214,6 +219,10 @@ def _wired(monkeypatch, form, *, auto_submit=False):
     monkeypatch.setattr(a, "_type", lambda ctrl, value, multiline=False: typed.append((ctrl.key, value)))
     monkeypatch.setattr(a, "_save", lambda f: saved.append(f))
     monkeypatch.setattr(a, "_blocking_dialog", lambda: None)
+    picked = []
+    monkeypatch.setattr(a, "_pick_product_code",
+                        lambda cell, name: picked.append((cell.key, name)))
+    a.picked = picked
     return a, typed, saved
 
 
@@ -230,6 +239,10 @@ def test_input_order_fills_every_mapped_field(monkeypatch):
     assert got["delivery_time"] == "14:30"
     assert got["card"] == "번창하세요"
     assert saved == []          # auto_submit=N 이면 저장하지 않는다
+    # 상품코드를 먼저 잡는다. 코드가 없으면 그 행은 주문으로 성립하지 않는다.
+    assert a.picked == [("product_code", "장미꽃다발")]
+    # 코드를 고르면 상품명 칸에 마스터 이름이 들어오므로, 원문으로 다시 덮어야 한다.
+    assert ("product_name", "장미꽃다발") in typed
 
 
 def test_input_order_saves_only_when_auto_submit(monkeypatch):
@@ -281,12 +294,98 @@ def test_card_is_typed_as_multiline(monkeypatch):
     monkeypatch.setattr(a, "_collect_edits", lambda f: list(f.cells))
     monkeypatch.setattr(a, "_type",
                         lambda ctrl, value, multiline=False: calls.append((ctrl.key, multiline)))
+    monkeypatch.setattr(a, "_pick_product_code", lambda cell, name: None)
+    monkeypatch.setattr(a, "_blocking_dialog", lambda: None)
 
     a.input_order(_order())
 
     modes = dict(calls)
     assert modes["card"] is True
     assert modes["delivery_place"] is False
+
+
+########################################################################
+# 상품코드 선택(팝업)
+########################################################################
+
+
+class _Popup:
+    def __init__(self, name="상품코드선택"):
+        self.Name = name
+        self.ClassName = layout.LOOKUP_CLASS
+        w, h = layout.LOOKUP_SIZE
+        self.BoundingRectangle = _Rect(400, 200, w, h)
+
+
+def _product_wired(monkeypatch, *, results):
+    """results = 검색어 → 선택 후 상품코드 칸에 남을 값('' 이면 매칭 실패)."""
+    a = _automator()
+    a._ui_pause = a._key_wait = a._clip_pause = 0
+    code_cell = _Cell("product_code", 0, 0)
+    code_cell.Name = ""
+    popup = {"win": None}
+    searched = []
+
+    def open_lookup(_cell):
+        popup["win"] = _Popup()
+        return popup["win"]
+
+    def search_and_pick(_popup, term):
+        searched.append(term)
+        code_cell.Name = results.get(term, "")
+        # 매칭 실패면 팝업이 그대로 남는다(실측)
+        if code_cell.Name:
+            popup["win"] = None
+        return bool(code_cell.Name)
+
+    monkeypatch.setattr(a, "_open_product_lookup", open_lookup)
+    monkeypatch.setattr(a, "_search_and_pick", search_and_pick)
+    monkeypatch.setattr(a, "_close_product_lookup", lambda p: popup.update(win=None))
+    monkeypatch.setattr(a, "_blocking_dialog", lambda: None)
+    return a, code_cell, searched, popup
+
+
+def test_product_code_picked_by_name(monkeypatch):
+    a, code_cell, searched, _p = _product_wired(monkeypatch, results={"꽃다발": "BB-05"})
+
+    a._pick_product_code(code_cell, "꽃다발")
+
+    assert searched == ["꽃다발"]
+    assert code_cell.Name == "BB-05"
+
+
+def test_product_code_uses_the_master_search_term(monkeypatch):
+    """검색어는 마스터에 있는 이름으로 바꿔 던진다.
+
+    마스터에 없는 말로 검색한 뒤 '선택'을 누르면 RoseWeb 이 죽는다(Access violation).
+    결과 목록은 UIA 에 안 보여 누르기 전에 확인할 수도 없어서, 애초에 맞는 말만 던진다.
+    """
+    a, code_cell, searched, _p = _product_wired(monkeypatch, results={"꽃다발": "BB-05"})
+
+    a._pick_product_code(code_cell, "장미꽃다발")   # 마스터엔 '꽃다발'만 있다
+
+    assert searched == ["꽃다발"]
+    assert code_cell.Name == "BB-05"
+
+
+def test_unknown_product_searches_기타(monkeypatch):
+    a, code_cell, searched, _p = _product_wired(monkeypatch, results={"기타": "ZZ-01"})
+
+    a._pick_product_code(code_cell, "듣도보도 못한 신상품")
+
+    assert searched == ["기타"]
+    assert code_cell.Name == "ZZ-01"
+
+
+def test_product_code_failure_aborts(monkeypatch):
+    """'기타'조차 못 고르면 코드 없는 주문이 된다 — 채우지 말고 백업으로 보낸다."""
+    a, code_cell, _s, popup = _product_wired(monkeypatch, results={})
+
+    with pytest.raises(RuntimeError, match="상품코드"):
+        a._pick_product_code(code_cell, "장미꽃다발")
+
+    assert len(_s) == 1              # 두 번 눌러보지 않는다(누르면 프로그램이 죽는다)
+    assert popup["win"] is None      # 팝업은 닫고 나온다
 
 
 class _Button:
@@ -319,8 +418,8 @@ def test_dialog_during_fill_aborts_and_names_the_field(monkeypatch):
     seen = {"n": 0}
 
     def after_one_field():
-        seen["n"] += 1
-        return dialog if seen["n"] >= 2 else None
+        # 상품코드 선택 뒤의 확인까지 세면 어긋난다 — 실제로 채운 칸 수로 판단한다.
+        return dialog if len(typed) >= 2 else None
 
     monkeypatch.setattr(a, "_blocking_dialog", after_one_field)
 
@@ -407,6 +506,7 @@ def test_clipboard_is_restored_after_filling(monkeypatch):
     monkeypatch.setattr(a, "_open_new_order", lambda: form)
     monkeypatch.setattr(a, "_collect_edits", lambda f: list(f.cells))
     monkeypatch.setattr(a, "_blocking_dialog", lambda: None)
+    monkeypatch.setattr(a, "_pick_product_code", lambda cell, name: None)
 
     a.input_order(_order())
 

@@ -75,6 +75,24 @@ FIELD_POSITIONS: dict[str, tuple[int, int]] = {
 # FIELD_POSITIONS 와 분리해 둔다.
 PRODUCT_CODE_POS: tuple[int, int] = (63, 275)   # TdxEdit 70x25
 
+# --- 상품코드선택 팝업(TFmCodesel) ------------------------------------
+# ⚠️ 상품코드가 비면 그 행은 주문으로 성립하지 않는다 — 금액·총합계금액이 계산되지 않고
+# '주문자료수'에도 안 잡힌다(사장님 실측). 그래서 코드는 반드시 채워야 한다.
+# 상품코드 칸에 포커스를 두고 {F2} 를 누르면 팝업이 뜬다(돋보기 클릭·F4·Alt+Down 은 안 먹었다).
+OPEN_PRODUCT_LOOKUP_KEY = "{F2}"
+
+# 팝업 기준 상대 좌표(실측 1048x531). 검색칸은 UIA 로 찾고, 버튼들은 좌표 클릭이다.
+LOOKUP_SIZE = (1048, 531)
+LOOKUP_SEARCH_BOX_POS: tuple[int, int] = (114, 72)       # 검색 콤보 안의 Edit
+LOOKUP_SEARCH_BUTTON_POS: tuple[int, int] = (378, 81)    # '▶검색'
+LOOKUP_PICK_BUTTON_POS: tuple[int, int] = (220, 508)     # '▶선택'
+LOOKUP_CANCEL_BUTTON_POS: tuple[int, int] = (302, 508)   # '▶취소'
+
+# 검색 결과가 없으면 '선택'을 눌러도 아무 일이 없고 팝업이 그대로 남는다(실측).
+# 그때 쓰는 폴백 상품명. 사장님 결정: 매칭 실패 시 '기타'로 코드를 잡고 상품명은
+# AI 가 뽑은 원문을 직접 써 넣는다. (이 꽃집 마스터에서 '기타' = ZZ-01)
+PRODUCT_FALLBACK_TERM = "기타"
+
 # 필드 매칭 허용 반경(px). 위 docstring 2번 참조.
 FIELD_MATCH_RADIUS = 12
 
